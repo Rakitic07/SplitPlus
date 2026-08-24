@@ -1,0 +1,154 @@
+// LOCAL DEVELOPMENT ONLY.
+// This mirrors prisma/schema.prisma but uses a zero-setup SQLite file so you
+// can run the app locally without a Postgres server. Production (Vercel) uses
+// prisma/schema.prisma (PostgreSQL). Keep the models below in sync with it.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  nameKey      String   @unique
+  passHash     String
+  recoveryHash String?
+  avatar       String?
+  defaultCurrency   String  @default("INR")
+  reminderEnabled   Boolean @default(false)
+  reminderFrequency String  @default("weekly")
+  createdAt    DateTime @default(now())
+
+  memberships     Membership[]
+  createdGroups   Group[]        @relation("GroupCreator")
+  paidExpenses    Expense[]      @relation("ExpensePayer")
+  createdExpenses Expense[]      @relation("ExpenseCreator")
+  shares          ExpenseShare[]
+  invitesSent     Invite[]       @relation("InviteInviter")
+  invitesReceived Invite[]       @relation("InviteInvitee")
+  settlementsFrom Settlement[]   @relation("SettlementFrom")
+  settlementsTo   Settlement[]   @relation("SettlementTo")
+  resetRequests   ResetRequest[]
+}
+
+model Group {
+  id          String   @id @default(cuid())
+  name        String
+  thumbnail   String?
+  currency    String   @default("INR")
+  emoji       String?
+  createdById String
+  createdBy   User     @relation("GroupCreator", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+
+  members     Membership[]
+  expenses    Expense[]
+  invites     Invite[]
+  settlements Settlement[]
+
+  @@index([createdById])
+}
+
+model Membership {
+  id       String   @id @default(cuid())
+  groupId  String
+  group    Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role     String   @default("member") // "owner" | "moderator" | "member"
+  joinedAt DateTime @default(now())
+
+  @@unique([groupId, userId])
+  @@index([userId])
+}
+
+model Invite {
+  id          String    @id @default(cuid())
+  groupId     String
+  group       Group     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  invitedById String
+  invitedBy   User      @relation("InviteInviter", fields: [invitedById], references: [id], onDelete: Cascade)
+  inviteeId   String
+  invitee     User      @relation("InviteInvitee", fields: [inviteeId], references: [id], onDelete: Cascade)
+  status      String    @default("pending")
+  createdAt   DateTime  @default(now())
+  resolvedAt  DateTime?
+
+  @@index([inviteeId, status])
+  @@index([groupId])
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  groupId     String
+  group       Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  title       String
+  category    String
+  amount      Float
+  paidById    String
+  paidBy      User     @relation("ExpensePayer", fields: [paidById], references: [id])
+  createdById String
+  createdBy   User     @relation("ExpenseCreator", fields: [createdById], references: [id])
+  date        DateTime
+  notes       String?
+  splitMode   String   @default("equal")
+  thumbnail   String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  shares      ExpenseShare[]
+
+  @@index([groupId, date])
+}
+
+model ExpenseShare {
+  id        String  @id @default(cuid())
+  expenseId String
+  expense   Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount    Float
+
+  @@unique([expenseId, userId])
+  @@index([userId])
+}
+
+model Settlement {
+  id         String    @id @default(cuid())
+  groupId    String
+  group      Group     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  fromId     String
+  from       User      @relation("SettlementFrom", fields: [fromId], references: [id])
+  toId       String
+  to         User      @relation("SettlementTo", fields: [toId], references: [id])
+  amount     Float
+  note       String?
+  thumbnail  String?
+  status     String    @default("pending")
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+
+  @@index([groupId, status])
+  @@index([toId, status])
+}
+
+model ResetRequest {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ticketHash    String    @unique
+  proposedHash  String
+  questionnaire String
+  status        String    @default("pending")
+  createdAt     DateTime  @default(now())
+  resolvedAt    DateTime?
+
+  @@index([status])
+}

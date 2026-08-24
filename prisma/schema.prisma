@@ -1,0 +1,176 @@
+generator client {
+  provider      = "prisma-client-js"
+  // Include the Linux target used by Vercel's serverless runtime alongside the
+  // local "native" one, so the generated engine works both places.
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// A person. Login is by name + passphrase (bcrypt). No public sign-up form —
+// exactly like Spendly-Plus, an account is created the first time you "unlock"
+// a new name, and re-entered afterwards.
+model User {
+  id           String  @id @default(cuid())
+  name         String
+  nameKey      String  @unique // lowercased name for case-insensitive uniqueness
+  passHash     String
+  recoveryHash String?
+  // Tiny base64 avatar (data URL, capped) — optional profile picture.
+  avatar       String?
+  // ── Personal settings ─────────────────────────────────────────────
+  // Pre-selected currency so new groups don't prompt every time.
+  defaultCurrency   String  @default("INR")
+  // In-app "settle up" nudges. frequency: daily | weekly | monthly.
+  reminderEnabled   Boolean @default(false)
+  reminderFrequency String  @default("weekly")
+  createdAt    DateTime @default(now())
+
+  memberships     Membership[]
+  createdGroups   Group[]      @relation("GroupCreator")
+  paidExpenses    Expense[]    @relation("ExpensePayer")
+  createdExpenses Expense[]    @relation("ExpenseCreator")
+  shares          ExpenseShare[]
+  invitesSent     Invite[]     @relation("InviteInviter")
+  invitesReceived Invite[]     @relation("InviteInvitee")
+  settlementsFrom Settlement[] @relation("SettlementFrom")
+  settlementsTo   Settlement[] @relation("SettlementTo")
+  resetRequests   ResetRequest[]
+}
+
+// A group of people who share expenses (a trip, a flat, a dinner club…).
+model Group {
+  id          String   @id @default(cuid())
+  name        String
+  // Tiny base64 thumbnail (data URL, capped ~120KB) — the group cover image.
+  thumbnail   String?
+  // ISO 4217 currency code for the whole group (defaults to INR).
+  currency    String   @default("INR")
+  emoji       String?
+  createdById String
+  createdBy   User     @relation("GroupCreator", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+
+  members     Membership[]
+  expenses    Expense[]
+  invites     Invite[]
+  settlements Settlement[]
+
+  @@index([createdById])
+}
+
+model Membership {
+  id       String   @id @default(cuid())
+  groupId  String
+  group    Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role     String   @default("member") // "owner" | "moderator" | "member"
+  joinedAt DateTime @default(now())
+
+  @@unique([groupId, userId])
+  @@index([userId])
+}
+
+// An invitation to join a group, sent to an existing user by name.
+model Invite {
+  id          String   @id @default(cuid())
+  groupId     String
+  group       Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  invitedById String
+  invitedBy   User     @relation("InviteInviter", fields: [invitedById], references: [id], onDelete: Cascade)
+  inviteeId   String
+  invitee     User     @relation("InviteInvitee", fields: [inviteeId], references: [id], onDelete: Cascade)
+  status      String   @default("pending") // pending | accepted | declined
+  createdAt   DateTime @default(now())
+  resolvedAt  DateTime?
+
+  @@index([inviteeId, status])
+  @@index([groupId])
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  groupId     String
+  group       Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  title       String
+  category    String
+  amount      Float
+  // The user who actually paid.
+  paidById    String
+  paidBy      User     @relation("ExpensePayer", fields: [paidById], references: [id])
+  createdById String
+  createdBy   User     @relation("ExpenseCreator", fields: [createdById], references: [id])
+  date        DateTime
+  notes       String?
+  // How the bill was split: equal | exact | percent | shares
+  splitMode   String   @default("equal")
+  // Optional receipt/screenshot preview (base64 data URL, capped).
+  thumbnail   String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  shares      ExpenseShare[]
+
+  @@index([groupId, date])
+}
+
+// How much a single participant owes for a single expense.
+model ExpenseShare {
+  id        String  @id @default(cuid())
+  expenseId String
+  expense   Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // The amount this user owes for the expense (their portion).
+  amount    Float
+
+  @@unique([expenseId, userId])
+  @@index([userId])
+}
+
+// A payment from one member to another to settle up. Only counts toward
+// balances once the RECIPIENT approves it (two-sided confirmation).
+model Settlement {
+  id         String   @id @default(cuid())
+  groupId    String
+  group      Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  fromId     String
+  from       User     @relation("SettlementFrom", fields: [fromId], references: [id])
+  toId       String
+  to         User     @relation("SettlementTo", fields: [toId], references: [id])
+  amount     Float
+  note       String?
+  // Optional proof-of-payment screenshot (base64 data URL, capped).
+  thumbnail  String?
+  status     String   @default("pending") // pending | approved | declined
+  createdAt  DateTime @default(now())
+  resolvedAt DateTime?
+
+  @@index([groupId, status])
+  @@index([toId, status])
+}
+
+// An admin-approved passphrase reset. The user proposes a new passphrase (stored
+// only as a hash) and answers a short questionnaire an admin verifies against
+// real data. Nothing changes until an admin approves. Keyed for lookup by a
+// one-time ticket the user keeps to check status.
+model ResetRequest {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ticketHash    String   @unique
+  proposedHash  String
+  questionnaire String
+  status        String   @default("pending") // pending | approved | rejected
+  createdAt     DateTime @default(now())
+  resolvedAt    DateTime?
+
+  @@index([status])
+}

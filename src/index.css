@@ -1,0 +1,285 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply text-white antialiased;
+  background: #0a0807;
+  overflow-x: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+    Inter, "Segoe UI", system-ui, sans-serif;
+}
+
+/* ---------- Liquid-glass surfaces (iOS-inspired, 3D depth) ---------- */
+@layer components {
+  .glass {
+    @apply relative border border-white/15 bg-white/[0.08] backdrop-blur-md;
+    background-image: linear-gradient(
+      160deg,
+      rgba(255, 255, 255, 0.2) 0%,
+      rgba(255, 255, 255, 0.06) 42%,
+      rgba(255, 255, 255, 0.02) 100%
+    );
+    box-shadow:
+      0 18px 40px -14px rgba(0, 0, 0, 0.6),
+      0 6px 14px -8px rgba(0, 0, 0, 0.5),
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.55),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.05),
+      inset 0 -22px 34px -26px rgba(0, 0, 0, 0.65);
+  }
+
+  .glass-strong {
+    @apply relative border border-white/20 bg-white/[0.12] backdrop-blur-lg;
+    background-image: linear-gradient(
+      160deg,
+      rgba(255, 255, 255, 0.28) 0%,
+      rgba(255, 255, 255, 0.1) 45%,
+      rgba(255, 255, 255, 0.03) 100%
+    );
+    box-shadow:
+      0 30px 60px -18px rgba(0, 0, 0, 0.7),
+      0 10px 24px -12px rgba(0, 0, 0, 0.55),
+      inset 0 1.5px 0 0 rgba(255, 255, 255, 0.7),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+      inset 0 -26px 40px -28px rgba(0, 0, 0, 0.7);
+  }
+
+  .glass-input {
+    @apply w-full rounded-2xl border border-white/15 px-4 py-3 text-white
+      placeholder-white/40 outline-none backdrop-blur-sm transition
+      focus:border-white/40 focus:ring-2 focus:ring-white/25;
+    background-image: linear-gradient(
+      160deg,
+      rgba(255, 255, 255, 0.14),
+      rgba(255, 255, 255, 0.04)
+    );
+    box-shadow:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.35),
+      inset 0 2px 8px -4px rgba(0, 0, 0, 0.55);
+  }
+
+  .glass-btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl border border-white/20
+      px-5 py-3 font-medium text-white backdrop-blur-sm transition
+      hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98]
+      disabled:cursor-not-allowed disabled:opacity-50;
+    background-image: linear-gradient(
+      160deg,
+      rgba(255, 255, 255, 0.22),
+      rgba(255, 255, 255, 0.08)
+    );
+    box-shadow:
+      0 10px 22px -12px rgba(0, 0, 0, 0.6),
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.5),
+      inset 0 -8px 16px -12px rgba(0, 0, 0, 0.5);
+  }
+
+  .glass-btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 font-semibold
+      text-white transition hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98]
+      disabled:cursor-not-allowed disabled:opacity-60;
+    background-image: linear-gradient(135deg, #ff8a3d, #ffab33 52%, #ffc23d);
+    box-shadow:
+      0 16px 34px -10px rgba(255, 138, 61, 0.7),
+      0 6px 14px -8px rgba(255, 176, 51, 0.55),
+      inset 0 1.5px 0 0 rgba(255, 255, 255, 0.55),
+      inset 0 -10px 20px -12px rgba(0, 0, 0, 0.35);
+  }
+  .glass-btn-primary:hover {
+    filter: brightness(1.08);
+  }
+
+  .pill {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-white/15 px-3 py-1
+      text-xs font-medium backdrop-blur-sm;
+    background-image: linear-gradient(
+      160deg,
+      rgba(255, 255, 255, 0.18),
+      rgba(255, 255, 255, 0.05)
+    );
+    box-shadow:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.4),
+      0 4px 10px -6px rgba(0, 0, 0, 0.5);
+  }
+
+  .gradient-text {
+    background-image: linear-gradient(135deg, #ffcf8a, #ffffff 45%, #ffd76b);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Warm wordmark that continuously shimmers — for the big Split+ lockup. */
+  .gradient-text-shimmer {
+    background-image: linear-gradient(
+      100deg,
+      #ffab33 0%,
+      #ffcf8a 32%,
+      #ffffff 50%,
+      #ffd76b 68%,
+      #ff8a3d 100%
+    );
+    background-size: 220% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    animation: shimmer-sweep 3.4s linear infinite;
+    will-change: background-position;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .gradient-text-shimmer {
+      animation: none;
+    }
+  }
+}
+
+/* ---------- Shimmer loading transition ---------- */
+@layer components {
+  .shimmer-text {
+    /* Symmetric band with flat rgba ends so the wrap point is invisible; paired
+       with a linear, constant-speed sweep for a smooth, jank-free loop. */
+    background: linear-gradient(
+      100deg,
+      rgba(255, 255, 255, 0.4) 0%,
+      rgba(255, 255, 255, 0.4) 40%,
+      rgba(255, 255, 255, 0.95) 50%,
+      rgba(255, 255, 255, 0.4) 60%,
+      rgba(255, 255, 255, 0.4) 100%
+    );
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    animation: shimmer-sweep 2.4s linear infinite;
+    will-change: background-position;
+  }
+
+  .shimmer-hover {
+    cursor: default;
+  }
+  .shimmer-hover:hover,
+  .shimmer-hover:focus-visible {
+    background-image: linear-gradient(
+      100deg,
+      #ffcf8a 0%,
+      #ffcf8a 35%,
+      #ffffff 50%,
+      #ffcf8a 65%,
+      #ffcf8a 100%
+    );
+    background-size: 220% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    animation: shimmer-sweep 1.15s ease-in-out infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .shimmer-hover:hover,
+    .shimmer-hover:focus-visible {
+      animation: none;
+    }
+  }
+
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+  .skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      100deg,
+      transparent 0%,
+      transparent 35%,
+      rgba(255, 255, 255, 0.12) 50%,
+      transparent 65%,
+      transparent 100%
+    );
+    background-size: 220% 100%;
+    animation: shimmer-sweep 1.6s ease-in-out infinite;
+  }
+}
+
+@keyframes shimmer-sweep {
+  0% {
+    background-position: 180% 0;
+  }
+  100% {
+    background-position: -80% 0;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.recharts-default-tooltip {
+  background: rgba(32, 26, 18, 0.88) !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  border-radius: 14px !important;
+}
+
+/* Phones: drop live backdrop-blur (the #1 scroll-jank cause) and paint solid,
+   slightly-translucent panels — looks near-identical, scrolls smoothly. */
+@media (max-width: 640px) {
+  .glass,
+  .glass-strong,
+  .glass-input,
+  .glass-btn,
+  .pill {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  .glass {
+    background-image: none;
+    background-color: rgba(28, 23, 16, 0.9);
+    box-shadow:
+      0 8px 20px -12px rgba(0, 0, 0, 0.6),
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.07);
+  }
+  .glass-strong {
+    background-image: none;
+    background-color: rgba(34, 28, 19, 0.95);
+    box-shadow:
+      0 12px 26px -14px rgba(0, 0, 0, 0.7),
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.1);
+  }
+  .bg-blob {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

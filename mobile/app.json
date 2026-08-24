@@ -1,0 +1,37 @@
+{
+  "expo": {
+    "name": "Split+",
+    "slug": "split-plus",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "splitplus",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0a0807",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/icon.png",
+      "backgroundColor": "#0a0807",
+      "resizeMode": "contain"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.splitplus.app"
+    },
+    "android": {
+      "package": "com.splitplus.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#0a0807"
+      }
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Split+ needs access to your photos to attach receipts and group covers."
+        }
+      ]
+    ]
+  }
+}
