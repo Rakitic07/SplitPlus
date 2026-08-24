@@ -1,0 +1,91 @@
+README.md
+  s_cb0fba85de97fe::t_7d9c918e832fa2 175,179
+  s_cb0fba85de97fe::t_22c77f82e8d6a0 1-174,176-178,180-190
+scripts/check-metrics.mjs
+  s_cb0fba85de97fe::t_50582813182204 1-42
+scripts/seed-demo.mjs
+  s_cb0fba85de97fe::t_03a1edfecc8f41 1-68,71-159
+  s_cb0fba85de97fe::t_ffd34022cf3e72 69-70
+server/index.ts
+  s_cb0fba85de97fe::t_d615db81aca989 1-9
+package.json
+  s_cb0fba85de97fe::t_099376ae44e605 1-54
+mobile/package-lock.json
+  s_cb0fba85de97fe::t_fb09c8ca434970 1-11516
+server/routes/admin.ts
+  s_cb0fba85de97fe::t_8d0ca7d1276550 92-96
+  s_cb0fba85de97fe::t_22e979fe3e3893 189
+  s_cb0fba85de97fe::t_ab773138a89fad 126
+  s_cb0fba85de97fe::t_340d61256b2542 89-91
+  s_cb0fba85de97fe::t_17ff30be05de77 97-99,123-125
+  s_cb0fba85de97fe::t_95ea60e4268b62 127-129,186-188
+  s_cb0fba85de97fe::t_03bdffc31fcf80 190-192
+mobile/src/shared/currency.ts
+  s_cb0fba85de97fe::t_c5038c2e28f3a7 1-45
+package-lock.json
+  s_cb0fba85de97fe::t_e49b9abdd980a2 1-5285
+scripts/shot.mjs
+  s_cb0fba85de97fe::t_69080570474b7c 21
+  s_cb0fba85de97fe::t_8826c960a78d5f 1-20,22-36
+mobile/src/shared/balances.ts
+  s_cb0fba85de97fe::t_1ac8c99520cfe0 1-73
+mobile/src/shared/categories.ts
+  s_cb0fba85de97fe::t_cd057436861130 1-30
+mobile/src/shared/split.ts
+  s_cb0fba85de97fe::t_4eb8db42c432ab 1-97
+api/index.ts
+  s_cb0fba85de97fe::t_84cc2a11552142 1-6
+server/app.ts
+  s_cb0fba85de97fe::t_8d69353a10d251 1-32
+server/lib/auth.ts
+  s_cb0fba85de97fe::t_995435922bc611 1-92
+server/lib/http.ts
+  s_cb0fba85de97fe::t_f905d9916892a0 1-80
+server/lib/prisma.ts
+  s_cb0fba85de97fe::t_1ad6acca7e6446 1-15
+server/lib/recovery.ts
+  s_cb0fba85de97fe::t_e9172745ebc8de 1-29
+server/routes/auth.ts
+  s_cb0fba85de97fe::t_645adbd48642c3 1-411
+server/routes/expenses.ts
+  s_cb0fba85de97fe::t_536b8304e7d85e 1-218
+server/routes/groups.ts
+  s_cb0fba85de97fe::t_08f061c57d9282 1-434
+server/routes/invites.ts
+  s_cb0fba85de97fe::t_389dad220be18d 1-175
+server/routes/settlements.ts
+  s_cb0fba85de97fe::t_9e928625b68656 1-190
+shared/balances.ts
+  s_cb0fba85de97fe::t_d9873fd02f7b03 1-73
+shared/categories.ts
+  s_cb0fba85de97fe::t_a8d2cbb47dfc2a 1-30
+shared/currency.ts
+  s_cb0fba85de97fe::t_0d3d0be47354ae 1-45
+shared/split.ts
+  s_cb0fba85de97fe::t_d838e62d6c83f1 1-97
+shared/types.ts
+  s_cb0fba85de97fe::t_57ce541d0b3108 1-141
+shared/validation.ts
+  s_cb0fba85de97fe::t_e14e6b0037add1 1-172
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "3091fd81deadf5c02da5ac8cbd24632482fbdc88",
+  "prompts": {},
+  "humans": {
+    "h_e5e8219ccbe631": {
+      "author": "Rakitic <rokktim07@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_cb0fba85de97fe": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "734c7345-66fa-44f9-a3c2-de3b88fff4a0",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": null
+    }
+  }
+}
