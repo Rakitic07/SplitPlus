@@ -1,0 +1,42 @@
+package.json
+  s_cb0fba85de97fe::t_099376ae44e605 1-54
+mobile/src/shared/categories.ts
+  s_cb0fba85de97fe::t_cd057436861130 1-30
+scripts/shot.mjs
+  s_cb0fba85de97fe::t_8826c960a78d5f 1-20,22-36
+  s_cb0fba85de97fe::t_69080570474b7c 21
+mobile/package-lock.json
+  s_cb0fba85de97fe::t_fb09c8ca434970 1-11516
+server/index.ts
+  s_cb0fba85de97fe::t_d615db81aca989 1-9
+README.md
+  s_cb0fba85de97fe::t_22c77f82e8d6a0 1-174,176-178,180-190
+  s_cb0fba85de97fe::t_7d9c918e832fa2 175,179
+mobile/src/shared/currency.ts
+  s_cb0fba85de97fe::t_c5038c2e28f3a7 1-45
+scripts/seed-demo.mjs
+  s_cb0fba85de97fe::t_03a1edfecc8f41 1-68,71-159
+  s_cb0fba85de97fe::t_ffd34022cf3e72 69-70
+package-lock.json
+  s_cb0fba85de97fe::t_e49b9abdd980a2 1-5285
+mobile/src/shared/split.ts
+  s_cb0fba85de97fe::t_4eb8db42c432ab 1-97
+mobile/src/shared/balances.ts
+  s_cb0fba85de97fe::t_1ac8c99520cfe0 1-73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "e5621ffe084df362bec5a41f14c06aac9bfd84ff",
+  "prompts": {},
+  "sessions": {
+    "s_cb0fba85de97fe": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "734c7345-66fa-44f9-a3c2-de3b88fff4a0",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": null
+    }
+  }
+}
