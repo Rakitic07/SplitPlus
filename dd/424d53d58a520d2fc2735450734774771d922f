@@ -1,0 +1,33 @@
+package.json
+  s_cb0fba85de97fe::t_099376ae44e605 1-53
+server/index.ts
+  s_cb0fba85de97fe::t_d615db81aca989 1-9
+mobile/src/shared/categories.ts
+  s_cb0fba85de97fe::t_cd057436861130 1-30
+mobile/src/shared/currency.ts
+  s_cb0fba85de97fe::t_c5038c2e28f3a7 1-45
+mobile/package-lock.json
+  s_cb0fba85de97fe::t_fb09c8ca434970 1-11516
+package-lock.json
+  s_cb0fba85de97fe::t_e49b9abdd980a2 1-5237
+mobile/src/shared/split.ts
+  s_cb0fba85de97fe::t_4eb8db42c432ab 1-97
+mobile/src/shared/balances.ts
+  s_cb0fba85de97fe::t_1ac8c99520cfe0 1-73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "dd424d53d58a520d2fc2735450734774771d922f",
+  "prompts": {},
+  "sessions": {
+    "s_cb0fba85de97fe": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "734c7345-66fa-44f9-a3c2-de3b88fff4a0",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "rakbiswa <rakbiswa@cisco.com>"
+    }
+  }
+}
