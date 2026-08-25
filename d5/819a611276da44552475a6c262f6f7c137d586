@@ -1,0 +1,256 @@
+mobile/android/app/src/main/res/values/colors.xml
+  s_cb0fba85de97fe::t_0b1f9a3442941a 3
+  s_cb0fba85de97fe::t_7f1f75ffa5019a 1-2
+  s_cb0fba85de97fe::t_61eeb42f9d4508 4-6
+mobile/src/lib/export.ts
+  s_cb0fba85de97fe::t_df2334db71b7fc 1-106
+mobile/src/screens/AuthScreen.tsx
+  s_cb0fba85de97fe::t_3e53da0cb21ddf 13,18,20,24,31-34,36,46-47,70-79,93,96,106,110,115-120,127-128
+  s_cb0fba85de97fe::t_997792a5a8eeeb 142,145
+src/pages/AuthPage.tsx
+  s_cb0fba85de97fe::t_f143efdd076886 159-178
+  s_cb0fba85de97fe::t_1d89b171ef9a7e 4,12
+scripts/check-export.mjs
+  s_cb0fba85de97fe::t_f218a32fa49668 1-108
+public/manifest.webmanifest
+  s_cb0fba85de97fe::t_1c962d706ddb1b 1-16
+mobile/src/components/SettingsSheet.tsx
+  s_cb0fba85de97fe::t_3ea643434e9727 1-185
+mobile/app.json
+  s_cb0fba85de97fe::t_5c2cdbcd86ad55 16-18,36-37
+  s_cb0fba85de97fe::t_f7e56f44c21f6c 27
+  s_cb0fba85de97fe::t_f5c5200dfef8d5 12
+src/components/ExportModal.tsx
+  s_cb0fba85de97fe::t_8ae089d125d9d4 1-5,8-335,337-343
+  s_cb0fba85de97fe::t_04b27bd1c1c1fc 6-7
+  s_cb0fba85de97fe::t_b2d07b1c455983 336
+src/lib/export.ts
+  s_cb0fba85de97fe::t_362203b76075bb 138-139,141
+  s_cb0fba85de97fe::t_e479449da5811a 1-137,140,142-252
+mobile/src/lib/storage.ts
+  s_cb0fba85de97fe::t_85bf1a93b29148 21-34
+package-lock.json
+  s_cb0fba85de97fe::t_718d1c66b95dee 19,2673-2678
+src/pages/HomePage.tsx
+  s_cb0fba85de97fe::t_a9da4675a0c2ea 172-235
+  s_cb0fba85de97fe::t_c97397cbe3d600 49
+  s_cb0fba85de97fe::t_7bd04e5c13ab95 436
+  s_cb0fba85de97fe::t_7028fa96d647df 328-341
+  s_cb0fba85de97fe::t_9e654ceca87b57 10,12-13
+  s_cb0fba85de97fe::t_06155d774c9168 50
+  s_cb0fba85de97fe::t_2e0694a0124563 51-72
+  s_cb0fba85de97fe::t_a1b71f14a0ef2d 4,9
+mobile/src/components/EditGroupSheet.tsx
+  s_cb0fba85de97fe::t_a9d6378fe29e8a 1-137
+src/components/ImageCropper.tsx
+  s_cb0fba85de97fe::t_81ccb1890c4311 1-238
+mobile/src/screens/GroupScreen.tsx
+  s_cb0fba85de97fe::t_9141afff7fe83c 375-382
+  s_cb0fba85de97fe::t_fc64931af2de83 7,11,23-24,27,34-43,47,50-60
+  s_cb0fba85de97fe::t_a3135861f09d88 1
+  s_cb0fba85de97fe::t_8b54edced1ed46 75,80-81
+  s_cb0fba85de97fe::t_b3571a0a36d1a4 219-223,237-241
+  s_cb0fba85de97fe::t_40e5a6b16d4061 5
+  s_cb0fba85de97fe::t_d089b7c88e9e19 48
+  s_cb0fba85de97fe::t_40a962812b7017 4,16
+  s_cb0fba85de97fe::t_2f7026d4face36 273-274,282-287,289-292
+  s_cb0fba85de97fe::t_2818e2bc2c0942 298
+  s_cb0fba85de97fe::t_defb3c99edc459 387-531
+  s_cb0fba85de97fe::t_433f477923f033 111-113,117-118,120-123
+  s_cb0fba85de97fe::t_4cfd7b67981187 132-141
+  s_cb0fba85de97fe::t_fae7c807edb389 351-374
+  s_cb0fba85de97fe::t_af896652395d79 322,324-331
+  s_cb0fba85de97fe::t_28adf0154c1883 384,897-907,910-926,928-943,945-948,953-972,980-1037
+  s_cb0fba85de97fe::t_196546ab4350fc 89-90,94-95
+  s_cb0fba85de97fe::t_7f6400faa33ec7 275-276
+  s_cb0fba85de97fe::t_7c9fe3667fafd9 218,224-230
+  s_cb0fba85de97fe::t_40d6ee2084ba14 386
+  s_cb0fba85de97fe::t_d17bdf4661e2e2 22
+  s_cb0fba85de97fe::t_ac9249b5e1fb34 49
+  s_cb0fba85de97fe::t_8fbcc749faebda 79
+  s_cb0fba85de97fe::t_c05cfdef423bf4 288
+  s_cb0fba85de97fe::t_de30f8fc0b0a5c 383,385,598-601,613-658,666-757,759-792,794-812,814-830,832-892
+  s_cb0fba85de97fe::t_0074ab517053e0 1079-1112
+  s_cb0fba85de97fe::t_ac3b9b84653e2d 83-88,91-93,96-110,114-116,119,124-128
+  s_cb0fba85de97fe::t_25e7c64c9a9178 333-334
+  s_cb0fba85de97fe::t_75557cf0024047 154-164
+  s_cb0fba85de97fe::t_3a90eb09d7f1c9 82
+mobile/package-lock.json
+  s_cb0fba85de97fe::t_c7e06e3846daa5 15-16,19-20,5930-5973,6070-6073,6080-6083,6086,6089-6092,6095
+mobile/src/components/ExportSheet.tsx
+  s_cb0fba85de97fe::t_d852fb6738f2af 1-266
+src/pages/GroupPage.tsx
+  s_cb0fba85de97fe::t_fdf41fab9dd3ab 743-753
+  s_cb0fba85de97fe::t_f57037ae287da1 238-262
+  s_cb0fba85de97fe::t_ff39be9d2d03e9 19
+  s_cb0fba85de97fe::t_3c7cbfe3e16b4d 15
+  s_cb0fba85de97fe::t_f9d44b9b5d2cbe 117
+  s_cb0fba85de97fe::t_fbd6c88e3af11a 286,288-289,292-293,295-312
+  s_cb0fba85de97fe::t_5487d252f9c41e 61-72,74-87,89-94
+  s_cb0fba85de97fe::t_f02ee48d57b2ca 517-523
+  s_cb0fba85de97fe::t_fb2fe5371bb18c 73
+  s_cb0fba85de97fe::t_512a1d2c5f4160 2
+  s_cb0fba85de97fe::t_cb591d790ea8c7 511-516
+  s_cb0fba85de97fe::t_7fbafdb7f9d44d 560-636,648-668,680,682-695
+  s_cb0fba85de97fe::t_37165ede38cef8 147-169
+  s_cb0fba85de97fe::t_dba18c9c3a96cf 1191-1241,1253,1255-1335,1337-1349
+  s_cb0fba85de97fe::t_2c06c399bda589 98
+  s_cb0fba85de97fe::t_70be5fd3dc1bbd 111-112
+  s_cb0fba85de97fe::t_547a7b720763c1 40
+  s_cb0fba85de97fe::t_4bbcc78756e5d9 11-12,23
+  s_cb0fba85de97fe::t_55004d6ef69cfe 1,3
+  s_cb0fba85de97fe::t_4622a75d233a65 380,391,396-446
+  s_cb0fba85de97fe::t_d3e89ff56c46df 88
+  s_cb0fba85de97fe::t_5296adb21f2f01 39
+shared/appVersion.ts
+  s_cb0fba85de97fe::t_ff89a855aba342 1-5,7-10,14-36
+  s_cb0fba85de97fe::t_c5f249619a70a5 11-13
+  s_cb0fba85de97fe::t_a5a1579768b8a1 6
+src/pages/AdminPage.tsx
+  s_cb0fba85de97fe::t_a1ff6d54d08e64 397-399,406,411,413-426
+  s_cb0fba85de97fe::t_92efb1569b2fca 102,106,117
+  s_cb0fba85de97fe::t_aa9ca14cb243d7 15,17
+  s_cb0fba85de97fe::t_3b7fb71835c4d3 161-208,210-224,226-237
+  s_cb0fba85de97fe::t_88758b39ce81ea 225
+  s_cb0fba85de97fe::t_eca57df662fae3 209
+mobile/package.json
+  s_cb0fba85de97fe::t_52721ccb908968 8-9,17-18,21-22
+mobile/src/shared/appVersion.ts
+  s_cb0fba85de97fe::t_745bb21b6e5a2d 1-2,4-6,8-15
+  s_cb0fba85de97fe::t_7f4cbd2bc2504f 7
+  s_cb0fba85de97fe::t_5497b3997e7a49 3
+server/routes/version.ts
+  s_cb0fba85de97fe::t_d273d8efd08929 1-94
+mobile/Makefile
+  s_cb0fba85de97fe::t_848782c036cc52 1-148
+mobile/src/components/MembersSheet.tsx
+  s_cb0fba85de97fe::t_14980b5d0b3cb2 1-74
+mobile/src/lib/api.ts
+  s_cb0fba85de97fe::t_7858baf926abaf 19
+  s_cb0fba85de97fe::t_3b86abe2e4dd46 20-22
+  s_cb0fba85de97fe::t_3fe9f8c24e06ef 89-108
+  s_cb0fba85de97fe::t_94e59f0c311799 124,127,135,143,187-192
+  s_cb0fba85de97fe::t_0d33351be34180 194-197
+  s_cb0fba85de97fe::t_e140966a729829 8,12-14
+  s_cb0fba85de97fe::t_e99c96f1e08dc6 56-69
+  s_cb0fba85de97fe::t_403d89ee7eb751 150-176
+  s_cb0fba85de97fe::t_d94b29cc04eaf6 199-210,214-225
+  s_cb0fba85de97fe::t_4e7a372b94dfb5 193,226,271,312-316
+  s_cb0fba85de97fe::t_ae64b3aed23089 233-238,248-256,267-270
+  s_cb0fba85de97fe::t_5c5c8e54784761 70-88
+  s_cb0fba85de97fe::t_79de8af7eab038 18
+scripts/og.mjs
+  s_cb0fba85de97fe::t_a91d46f4f5f225 1-63
+src/components/CreateGroupModal.tsx
+  s_cb0fba85de97fe::t_8723f055d53f96 2,4,9
+  s_cb0fba85de97fe::t_15889943d8668e 69-70
+  s_cb0fba85de97fe::t_60ce8f1fe6a319 285-295
+  s_cb0fba85de97fe::t_13c320307212e8 87,90-92
+  s_cb0fba85de97fe::t_78ccfa0dbf9985 155-176
+  s_cb0fba85de97fe::t_8b3dd9a9f0434c 32-33
+package.json
+  s_cb0fba85de97fe::t_a062434ad3d305 26
+server/app.ts
+  s_cb0fba85de97fe::t_e6a6c2227f9980 10
+  s_cb0fba85de97fe::t_ce8588edde1f3b 11
+  s_cb0fba85de97fe::t_bd5b2a0473773f 44
+  s_cb0fba85de97fe::t_7926bc85340e07 43
+mobile/src/state/auth.tsx
+  s_cb0fba85de97fe::t_965b87a9832edd 9,14-18,24-27
+  s_cb0fba85de97fe::t_bc7afed2d7d2c6 58-59,62,67-79,90-91
+  s_cb0fba85de97fe::t_8700659fd2bc99 10,21-22,35
+scripts/check-metrics.mjs
+  s_cb0fba85de97fe::t_f661728263294c 37-43
+mobile/src/screens/HomeScreen.tsx
+  s_cb0fba85de97fe::t_8a1f2137add405 19
+  s_cb0fba85de97fe::t_c2a0dcd55a8a08 23
+  s_cb0fba85de97fe::t_8a01a834d2ba03 47
+  s_cb0fba85de97fe::t_13b55903ebbe06 92-110
+  s_cb0fba85de97fe::t_e1c4ac8887f896 270-277
+  s_cb0fba85de97fe::t_f6c1674686b41a 347
+  s_cb0fba85de97fe::t_d1d66e4cd98a9e 159-160,163-176
+  s_cb0fba85de97fe::t_e99fd56019d4bd 3
+  s_cb0fba85de97fe::t_f7b40598cc94a6 136-138
+  s_cb0fba85de97fe::t_6479822bd679bf 460
+  s_cb0fba85de97fe::t_5955b79eec6464 48-53
+  s_cb0fba85de97fe::t_da488e3137997c 143-149
+  s_cb0fba85de97fe::t_5983c09920b14a 180-227
+  s_cb0fba85de97fe::t_28aefacd09ec90 473-481
+  s_cb0fba85de97fe::t_7d3604eb9b6b94 57-61
+  s_cb0fba85de97fe::t_b2844bd955841f 348
+  s_cb0fba85de97fe::t_2b6d9460cb8645 292,297
+  s_cb0fba85de97fe::t_2f7175655223ca 1
+  s_cb0fba85de97fe::t_8348dbffe0635f 38
+  s_cb0fba85de97fe::t_b13689bb4dbfc9 20,22
+  s_cb0fba85de97fe::t_e431f39debd240 471-472
+  s_cb0fba85de97fe::t_ab0dbcf339d746 72-91
+server/routes/admin.ts
+  s_cb0fba85de97fe::t_097f20fd76c98b 189
+  s_cb0fba85de97fe::t_e4e6ba87b060ac 462
+  s_cb0fba85de97fe::t_dd37117d4da4f0 449,456,458-461,463
+  s_cb0fba85de97fe::t_4b6eac07d44da7 82-103,111,113-188,190-249,252-253
+  s_cb0fba85de97fe::t_32181933c1d509 104-110,112
+  s_cb0fba85de97fe::t_398a82b3e646be 373-376,379-386
+scripts/gen-icons.mjs
+  s_cb0fba85de97fe::t_abcfba46071a99 55-56
+  s_cb0fba85de97fe::t_5e1b3123392efd 61-74,80
+  s_cb0fba85de97fe::t_17b34284ea157e 1-43,48-54,57-60,81-104
+  s_cb0fba85de97fe::t_4a013d6a0a8ba2 44-47
+  s_cb0fba85de97fe::t_8d98c2605999d0 75-79
+mobile/src/components/RecoverSheet.tsx
+  s_cb0fba85de97fe::t_460e073ad092fb 1-41,44-59,61-529
+  s_cb0fba85de97fe::t_cfb106d6972ec3 42-43
+  s_cb0fba85de97fe::t_da4d79fa4b3d3b 60
+scripts/check-search.mjs
+  s_cb0fba85de97fe::t_1aa0d8e6b96633 1-113
+src/lib/api.ts
+  s_cb0fba85de97fe::t_32e9bd8a290a71 104-117,124,128-129
+  s_cb0fba85de97fe::t_de6e321fdfd07c 162-177
+  s_cb0fba85de97fe::t_395b11e7d8cb64 302-306
+  s_cb0fba85de97fe::t_72238d291bf9a5 296-301
+  s_cb0fba85de97fe::t_1278a475e3c3be 150-161
+index.html
+  s_cb0fba85de97fe::t_a8be8aa152b5c0 15,17-20,24-36
+  s_cb0fba85de97fe::t_58a895b137e6ea 6-9,12-14
+src/lib/utils.ts
+  s_cb0fba85de97fe::t_ef8cae472404e0 49-58
+mobile/src/lib/appUpdate.ts
+  s_cb0fba85de97fe::t_3d8d653ebffa7d 1-76
+mobile/android/build.gradle
+  s_cb0fba85de97fe::t_fc83e1f29a7aaf 12,16,23-25,42-43
+  s_cb0fba85de97fe::t_eea854e1564a1b 17-19
+  s_cb0fba85de97fe::t_f757c2b70563df 20-22
+  s_cb0fba85de97fe::t_8ab5a88aa402fb 9-11
+  s_cb0fba85de97fe::t_b68e7ebd4d16f2 13-15
+  s_cb0fba85de97fe::t_bb9b0f3d90e68b 26-28,39-41
+src/components/EditGroupModal.tsx
+  s_cb0fba85de97fe::t_7dfb23be7a504b 1,3,5-8,10-34,38-49,51-52,56-120,140-185,197-199
+  s_cb0fba85de97fe::t_2373b319a6c87e 186-196
+  s_cb0fba85de97fe::t_2de2eb93e45114 35-37,50,53-55
+  s_cb0fba85de97fe::t_93f6f084639fc9 2,4,9
+  s_cb0fba85de97fe::t_f2fb0278c7d425 121-139
+server/routes/search.ts
+  s_cb0fba85de97fe::t_775ef5515a83d8 1-76
+  s_cb0fba85de97fe::t_2e75eba323e07e 77-134
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "d5819a611276da44552475a6c262f6f7c137d586",
+  "prompts": {},
+  "humans": {
+    "h_e5e8219ccbe631": {
+      "author": "Rakitic <rokktim07@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_cb0fba85de97fe": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "734c7345-66fa-44f9-a3c2-de3b88fff4a0",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": null
+    }
+  }
+}
