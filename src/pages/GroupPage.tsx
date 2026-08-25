@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { motion } from "framer-motion";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft,
   ArrowRight,
@@ -8,14 +8,19 @@ import {
   BarChart3,
   CalendarDays,
   Check,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   Crown,
+  Download,
   HandCoins,
   ImageIcon,
   Info,
+  Pencil,
   Plus,
   Receipt,
   Scale,
+  Search,
   Share2,
   Shield,
   ShieldPlus,
@@ -31,6 +36,8 @@ import { SettleUpModal } from "@/components/SettleUpModal";
 import { InviteModal } from "@/components/InviteModal";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { MembersModal } from "@/components/MembersModal";
+import { EditGroupModal } from "@/components/EditGroupModal";
+import { ExportModal } from "@/components/ExportModal";
 import { BalanceBars, CategoryDonut, PaidByBars, TrendArea } from "@/components/charts";
 import { MoneyFlow } from "@/components/MoneyFlow";
 import { api, ApiError } from "@/lib/api";
@@ -51,9 +58,44 @@ import type {
 
 type Tab = "expenses" | "balances" | "charts" | "activity" | "info";
 
+// Left-to-right order of the tabs, used for swipe navigation and slide direction.
+const TAB_ORDER: Tab[] = ["expenses", "balances", "charts", "activity", "info"];
+
+// Horizontal slide used when moving between tabs. `dir` = +1 (moving right /
+// next) or -1 (moving left / previous).
+const tabSlide = {
+  enter: (dir: number) => ({ opacity: 0, x: dir > 0 ? 48 : -48 }),
+  center: { opacity: 1, x: 0 },
+  exit: (dir: number) => ({ opacity: 0, x: dir > 0 ? -48 : 48 }),
+};
+
+// Detect a mostly-horizontal touch swipe without hijacking vertical scroll.
+// Natural paging: left swipe (finger moves ←) advances a tab; right swipe (→) goes back.
+function useSwipeNav(onNext: () => void, onPrev: () => void) {
+  const start = useRef<{ x: number; y: number } | null>(null);
+  return {
+    onTouchStart: (e: React.TouchEvent) => {
+      const t = e.touches[0];
+      start.current = { x: t.clientX, y: t.clientY };
+    },
+    onTouchEnd: (e: React.TouchEvent) => {
+      if (!start.current) return;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - start.current.x;
+      const dy = t.clientY - start.current.y;
+      start.current = null;
+      if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.4) {
+        if (dx < 0) onNext();
+        else onPrev();
+      }
+    },
+  };
+}
+
 export function GroupPage() {
   const { groupId = "" } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { success, error } = useToast();
 
   const [group, setGroup] = useState<GroupDetail | null>(null);
@@ -66,10 +108,13 @@ export function GroupPage() {
   const [loading, setLoading] = useState(true);
 
   const [tab, setTab] = useState<Tab>("expenses");
+  const [tabDir, setTabDir] = useState(0);
+  const [showExport, setShowExport] = useState(false);
   const [showExpense, setShowExpense] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
   const [showSettle, setShowSettle] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
   const [confirmKind, setConfirmKind] = useState<null | "delete" | "leave">(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [showMembers, setShowMembers] = useState(false);
@@ -99,15 +144,29 @@ export function GroupPage() {
     refresh();
   }, [refresh]);
 
-  async function openExpense(expenseId: string) {
-    try {
-      const { expense } = await api.getExpense(groupId, expenseId);
-      setEditing(expense);
-      setShowExpense(true);
-    } catch {
-      error("Couldn't open expense");
-    }
-  }
+  const openExpense = useCallback(
+    async (expenseId: string) => {
+      try {
+        const { expense } = await api.getExpense(groupId, expenseId);
+        setEditing(expense);
+        setShowExpense(true);
+      } catch {
+        error("Couldn't open expense");
+      }
+    },
+    [groupId, error]
+  );
+
+  // Deep-link from global search: /g/:id?expense=:eid opens that expense once the
+  // group has loaded, then strips the param so it doesn't reopen on refresh.
+  useEffect(() => {
+    const eid = searchParams.get("expense");
+    if (!eid || loading || !group) return;
+    openExpense(eid);
+    const next = new URLSearchParams(searchParams);
+    next.delete("expense");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, loading, group, openExpense, setSearchParams]);
 
   async function deleteExpense(expense: Expense) {
     if (!confirm(`Delete "${expense.title}"?`)) return;
@@ -176,6 +235,31 @@ export function GroupPage() {
   const currency = group?.currency ?? "INR";
   const elevated = group?.role === "owner" || group?.role === "moderator";
 
+  // Switch to a specific tab, remembering the slide direction.
+  const goTab = useCallback(
+    (next: Tab) => {
+      setTabDir(TAB_ORDER.indexOf(next) >= TAB_ORDER.indexOf(tab) ? 1 : -1);
+      setTab(next);
+    },
+    [tab]
+  );
+  // Step one tab over (used by swipe): delta +1 = next, -1 = previous.
+  const shiftTab = useCallback(
+    (delta: number) => {
+      const i = TAB_ORDER.indexOf(tab);
+      const j = Math.min(TAB_ORDER.length - 1, Math.max(0, i + delta));
+      if (j !== i) {
+        setTabDir(delta);
+        setTab(TAB_ORDER[j]);
+      }
+    },
+    [tab]
+  );
+  const swipe = useSwipeNav(
+    () => shiftTab(1),
+    () => shiftTab(-1)
+  );
+
   return (
     <div className="min-h-screen pb-28">
       {/* Cover header */}
@@ -199,14 +283,33 @@ export function GroupPage() {
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
-          {elevated && (
+          <div className="flex items-center gap-2">
             <button
-              onClick={() => setShowInvite(true)}
+              onClick={() => setShowExport(true)}
+              title="Download expenses"
               className="glass flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-semibold text-white/90"
             >
-              <UserPlus className="h-4 w-4" /> Invite
+              <Download className="h-4 w-4" />
+              <span className="hidden sm:inline">Export</span>
             </button>
-          )}
+            {elevated && (
+              <>
+                <button
+                  onClick={() => setShowEdit(true)}
+                  title="Edit group"
+                  className="glass flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-semibold text-white/90"
+                >
+                  <Pencil className="h-4 w-4" /> Edit
+                </button>
+                <button
+                  onClick={() => setShowInvite(true)}
+                  className="glass flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-semibold text-white/90"
+                >
+                  <UserPlus className="h-4 w-4" /> Invite
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
         <div className="absolute bottom-3 left-4 right-4">
@@ -274,7 +377,7 @@ export function GroupPage() {
           ] as { k: Tab; label: string; icon: React.ReactNode }[]).map((t) => (
             <button
               key={t.k}
-              onClick={() => setTab(t.k)}
+              onClick={() => goTab(t.k)}
               className={`flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-xs font-semibold transition sm:text-sm ${
                 tab === t.k ? "bg-white/15 text-white" : "text-white/50 hover:text-white/80"
               }`}
@@ -285,48 +388,62 @@ export function GroupPage() {
           ))}
         </div>
 
-        <div className="mt-4">
+        <div className="mt-4 overflow-hidden" {...swipe}>
           {loading ? (
             <Card className="p-2">
               <SkeletonRows count={6} />
             </Card>
-          ) : !group ? null : tab === "expenses" ? (
-            <ExpensesTab
-              expenses={expenses}
-              currency={currency}
-              myId={group.myUserId}
-              onOpen={openExpense}
-            />
-          ) : tab === "balances" ? (
-            <BalancesTab
-              balances={balances}
-              debts={debts}
-              currency={currency}
-              myId={group.myUserId}
-              onSettle={() => setShowSettle(true)}
-            />
-          ) : tab === "charts" ? (
-            <ChartsTab
-              expenses={expenses}
-              balances={balances}
-              debts={debts}
-              currency={currency}
-            />
-          ) : tab === "activity" ? (
-            <ActivityTab
-              settlements={settlements}
-              currency={currency}
-              myId={group.myUserId}
-              onRespond={respondSettlement}
-            />
-          ) : (
-            <InfoTab
-              group={group}
-              stats={stats}
-              currency={currency}
-              elevated={elevated}
-              onChangeRole={changeRole}
-            />
+          ) : !group ? null : (
+            <AnimatePresence mode="wait" custom={tabDir} initial={false}>
+              <motion.div
+                key={tab}
+                custom={tabDir}
+                variants={tabSlide}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{ duration: 0.22, ease: "easeOut" }}
+              >
+                {tab === "expenses" ? (
+                  <ExpensesTab
+                    expenses={expenses}
+                    currency={currency}
+                    myId={group.myUserId}
+                    onOpen={openExpense}
+                  />
+                ) : tab === "balances" ? (
+                  <BalancesTab
+                    balances={balances}
+                    debts={debts}
+                    currency={currency}
+                    myId={group.myUserId}
+                    onSettle={() => setShowSettle(true)}
+                  />
+                ) : tab === "charts" ? (
+                  <ChartsTab
+                    expenses={expenses}
+                    balances={balances}
+                    debts={debts}
+                    currency={currency}
+                  />
+                ) : tab === "activity" ? (
+                  <ActivityTab
+                    settlements={settlements}
+                    currency={currency}
+                    myId={group.myUserId}
+                    onRespond={respondSettlement}
+                  />
+                ) : (
+                  <InfoTab
+                    group={group}
+                    stats={stats}
+                    currency={currency}
+                    elevated={elevated}
+                    onChangeRole={changeRole}
+                  />
+                )}
+              </motion.div>
+            </AnimatePresence>
           )}
         </div>
 
@@ -391,6 +508,19 @@ export function GroupPage() {
             groupId={group.id}
             groupName={group.name}
           />
+          <EditGroupModal
+            open={showEdit}
+            onClose={() => setShowEdit(false)}
+            group={group}
+            onSaved={refresh}
+          />
+          <ExportModal
+            open={showExport}
+            onClose={() => setShowExport(false)}
+            scope="group"
+            group={group}
+            expenses={expenses}
+          />
           <ConfirmDialog
             open={confirmKind !== null}
             danger
@@ -427,6 +557,83 @@ export function GroupPage() {
 
 /* ── Tabs ──────────────────────────────────────────────────────────────── */
 
+// How many rows a paginated list shows at once.
+const PAGE_SIZE = 5;
+
+// A compact, theme-matched search input used inside the group tabs.
+function SearchField({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <div className="relative">
+      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="glass-input !pl-10"
+      />
+      {value && (
+        <button
+          type="button"
+          onClick={() => onChange("")}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 transition hover:text-white/80"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+// Prev / next pager with an "X–Y of N" summary. Hidden when a single page.
+function Pager({
+  page,
+  pageCount,
+  total,
+  onPrev,
+  onNext,
+}: {
+  page: number;
+  pageCount: number;
+  total: number;
+  onPrev: () => void;
+  onNext: () => void;
+}) {
+  if (pageCount <= 1) return null;
+  const from = page * PAGE_SIZE + 1;
+  const to = Math.min(total, (page + 1) * PAGE_SIZE);
+  return (
+    <div className="flex items-center justify-between px-1">
+      <span className="text-xs text-white/45">
+        {from}–{to} of {total}
+      </span>
+      <div className="flex items-center gap-1.5">
+        <button
+          onClick={onPrev}
+          disabled={page <= 0}
+          className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-white/70 transition enabled:hover:bg-white/10 disabled:opacity-35"
+        >
+          <ChevronLeft className="h-4 w-4" /> Newer
+        </button>
+        <button
+          onClick={onNext}
+          disabled={page >= pageCount - 1}
+          className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-white/70 transition enabled:hover:bg-white/10 disabled:opacity-35"
+        >
+          Older <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ExpensesTab({
   expenses,
   currency,
@@ -438,6 +645,27 @@ function ExpensesTab({
   myId: string;
   onOpen: (id: string) => void;
 }) {
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(0);
+  const q = query.trim().toLowerCase();
+
+  const filtered = useMemo(() => {
+    if (!q) return expenses;
+    return expenses.filter(
+      (e) =>
+        e.title.toLowerCase().includes(q) ||
+        e.category.toLowerCase().includes(q) ||
+        (e.notes ?? "").toLowerCase().includes(q) ||
+        e.paidBy.name.toLowerCase().includes(q)
+    );
+  }, [expenses, q]);
+
+  useEffect(() => setPage(0), [q]);
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const clamped = Math.min(page, pageCount - 1);
+  const slice = filtered.slice(clamped * PAGE_SIZE, clamped * PAGE_SIZE + PAGE_SIZE);
+
   if (expenses.length === 0) {
     return (
       <Card>
@@ -449,9 +677,22 @@ function ExpensesTab({
       </Card>
     );
   }
+
   return (
-    <Card className="divide-y divide-white/5 p-1">
-      {expenses.map((e, i) => {
+    <div className="space-y-3">
+      <SearchField value={query} onChange={setQuery} placeholder="Search this group's expenses…" />
+
+      {filtered.length === 0 ? (
+        <Card>
+          <EmptyState
+            icon={<Search className="h-8 w-8" />}
+            title="No matches"
+            subtitle={`Nothing matches “${query.trim()}”. Try a different word.`}
+          />
+        </Card>
+      ) : (
+        <Card className="divide-y divide-white/5 p-1">
+          {slice.map((e, i) => {
         const cat = categoryMeta(e.category);
         const myShare = e.shares.find((s) => s.userId === myId)?.amount ?? 0;
         const iPaid = e.paidBy.id === myId ? e.amount : 0;
@@ -499,7 +740,17 @@ function ExpensesTab({
           </motion.button>
         );
       })}
-    </Card>
+        </Card>
+      )}
+
+      <Pager
+        page={clamped}
+        pageCount={pageCount}
+        total={filtered.length}
+        onPrev={() => setPage((p) => Math.max(0, p - 1))}
+        onNext={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+      />
+    </div>
   );
 }
 
@@ -937,6 +1188,57 @@ function ActivityTab({
   myId: string;
   onRespond: (s: Settlement, action: "approve" | "decline") => void;
 }) {
+  const [query, setQuery] = useState("");
+  // 0 = current month, -1 = last month, … (only used when not searching).
+  const [monthOffset, setMonthOffset] = useState(0);
+  const [page, setPage] = useState(0);
+
+  const q = query.trim().toLowerCase();
+  const searching = q.length > 0;
+
+  // First day of the month currently in view.
+  const monthStart = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    d.setDate(1);
+    d.setMonth(d.getMonth() + monthOffset);
+    return d;
+  }, [monthOffset]);
+  const monthLabel = monthStart.toLocaleDateString(undefined, {
+    month: "long",
+    year: "numeric",
+  });
+
+  const filtered = useMemo(() => {
+    if (searching) {
+      return settlements.filter(
+        (s) =>
+          s.from.name.toLowerCase().includes(q) ||
+          s.to.name.toLowerCase().includes(q) ||
+          (s.note ?? "").toLowerCase().includes(q) ||
+          s.status.toLowerCase().includes(q)
+      );
+    }
+    return settlements.filter((s) => {
+      const d = new Date(s.createdAt);
+      return (
+        d.getFullYear() === monthStart.getFullYear() && d.getMonth() === monthStart.getMonth()
+      );
+    });
+  }, [settlements, q, searching, monthStart]);
+
+  useEffect(() => setPage(0), [q, monthOffset]);
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const clamped = Math.min(page, pageCount - 1);
+  const slice = filtered.slice(clamped * PAGE_SIZE, clamped * PAGE_SIZE + PAGE_SIZE);
+
+  const statusStyle: Record<string, string> = {
+    pending: "text-amber-300",
+    approved: "text-emerald-400",
+    declined: "text-rose-400",
+  };
+
   if (settlements.length === 0) {
     return (
       <Card>
@@ -948,54 +1250,102 @@ function ActivityTab({
       </Card>
     );
   }
-  const statusStyle: Record<string, string> = {
-    pending: "text-amber-300",
-    approved: "text-emerald-400",
-    declined: "text-rose-400",
-  };
+
   return (
-    <Card className="divide-y divide-white/5 p-1">
-      {settlements.map((s) => {
-        const canAct = s.status === "pending" && s.to.id === myId;
-        return (
-          <div key={s.id} className="flex items-center gap-3 px-3 py-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-300">
-              <HandCoins className="h-5 w-5" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-semibold text-white">
-                {s.from.id === myId ? "You" : s.from.name} paid{" "}
-                {s.to.id === myId ? "you" : s.to.name} {formatMoney(currency, s.amount)}
+    <div className="space-y-3">
+      <SearchField
+        value={query}
+        onChange={setQuery}
+        placeholder="Search activity by name, note or status…"
+      />
+
+      {/* Month/year navigator — hidden while searching (results span all months). */}
+      {!searching && (
+        <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/20 px-3 py-2">
+          <button
+            onClick={() => setMonthOffset((m) => m - 1)}
+            className="flex items-center gap-1 rounded-full px-2.5 py-1.5 text-sm text-white/70 transition hover:bg-white/10"
+          >
+            <ChevronLeft className="h-4 w-4" /> Older
+          </button>
+          <span className="flex items-center gap-1.5 text-sm font-semibold text-white">
+            <CalendarDays className="h-4 w-4 text-white/50" /> {monthLabel}
+          </span>
+          <button
+            onClick={() => setMonthOffset((m) => Math.min(0, m + 1))}
+            disabled={monthOffset >= 0}
+            className="flex items-center gap-1 rounded-full px-2.5 py-1.5 text-sm text-white/70 transition enabled:hover:bg-white/10 disabled:opacity-35"
+          >
+            Newer <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      {filtered.length === 0 ? (
+        <Card>
+          <EmptyState
+            icon={searching ? <Search className="h-8 w-8" /> : <HandCoins className="h-8 w-8" />}
+            title={searching ? "No matches" : "No activity"}
+            subtitle={
+              searching
+                ? `Nothing matches “${query.trim()}”.`
+                : `No payments recorded in ${monthLabel}.`
+            }
+          />
+        </Card>
+      ) : (
+        <Card className="divide-y divide-white/5 p-1">
+          {slice.map((s) => {
+            const canAct = s.status === "pending" && s.to.id === myId;
+            return (
+              <div key={s.id} className="flex items-center gap-3 px-3 py-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-300">
+                  <HandCoins className="h-5 w-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold text-white">
+                    {s.from.id === myId ? "You" : s.from.name} paid{" "}
+                    {s.to.id === myId ? "you" : s.to.name} {formatMoney(currency, s.amount)}
+                  </div>
+                  <div className="truncate text-xs text-white/45">
+                    {fmtDay(s.createdAt)}
+                    {s.note ? ` · ${s.note}` : ""} ·{" "}
+                    <span className={statusStyle[s.status]}>{s.status}</span>
+                  </div>
+                </div>
+                {canAct ? (
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={() => onRespond(s, "approve")}
+                      className="rounded-full bg-emerald-500/20 p-2 text-emerald-300 transition hover:bg-emerald-500/30"
+                    >
+                      <Check className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => onRespond(s, "decline")}
+                      className="rounded-full bg-white/10 p-2 text-white/60 transition hover:bg-white/20"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : s.status === "pending" ? (
+                  <span className="flex items-center gap-1 text-xs text-amber-300">
+                    <Clock className="h-3 w-3" /> waiting
+                  </span>
+                ) : null}
               </div>
-              <div className="truncate text-xs text-white/45">
-                {fmtDay(s.createdAt)}
-                {s.note ? ` · ${s.note}` : ""} ·{" "}
-                <span className={statusStyle[s.status]}>{s.status}</span>
-              </div>
-            </div>
-            {canAct ? (
-              <div className="flex gap-1.5">
-                <button
-                  onClick={() => onRespond(s, "approve")}
-                  className="rounded-full bg-emerald-500/20 p-2 text-emerald-300 transition hover:bg-emerald-500/30"
-                >
-                  <Check className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={() => onRespond(s, "decline")}
-                  className="rounded-full bg-white/10 p-2 text-white/60 transition hover:bg-white/20"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            ) : s.status === "pending" ? (
-              <span className="flex items-center gap-1 text-xs text-amber-300">
-                <Clock className="h-3 w-3" /> waiting
-              </span>
-            ) : null}
-          </div>
-        );
-      })}
-    </Card>
+            );
+          })}
+        </Card>
+      )}
+
+      <Pager
+        page={clamped}
+        pageCount={pageCount}
+        total={filtered.length}
+        onPrev={() => setPage((p) => Math.max(0, p - 1))}
+        onNext={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+      />
+    </div>
   );
 }

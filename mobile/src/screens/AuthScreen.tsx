@@ -10,24 +10,30 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button, Card, Input, Label } from "../components/ui";
+import { RecoverSheet } from "../components/RecoverSheet";
 import { useAuth } from "../state/auth";
 import { useToast } from "../state/toast";
 import { ApiError } from "../lib/api";
 import { theme } from "../theme";
+import type { SelfUser } from "../shared/types";
 
-type Mode = "login" | "register" | "recover";
+type Mode = "login" | "register";
 
 export function AuthScreen() {
   const insets = useSafeAreaInsets();
-  const { login, register, recover } = useAuth();
+  const { login, register, finishAuth } = useAuth();
   const { success, error } = useToast();
 
   const [mode, setMode] = useState<Mode>("login");
   const [name, setName] = useState("");
   const [pass, setPass] = useState("");
-  const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
+  const [showRecover, setShowRecover] = useState(false);
+
+  // After signup we show the one-time recovery code, THEN finish auth so the
+  // code screen isn't skipped (mirrors the web flow).
   const [recovery, setRecovery] = useState<string | null>(null);
+  const [pendingUser, setPendingUser] = useState<SelfUser | null>(null);
 
   async function submit() {
     if (!name.trim() || !pass) return error("Enter your name and passphrase");
@@ -36,11 +42,9 @@ export function AuthScreen() {
       if (mode === "login") {
         await login(name.trim(), pass);
         success(`Welcome back, ${name.trim()}!`);
-      } else if (mode === "register") {
-        const { recoveryCode } = await register(name.trim(), pass);
-        setRecovery(recoveryCode);
       } else {
-        const { recoveryCode } = await recover(name.trim(), code.trim(), pass);
+        const { user, recoveryCode } = await register(name.trim(), pass);
+        setPendingUser(user);
         setRecovery(recoveryCode);
       }
     } catch (err) {
@@ -63,7 +67,16 @@ export function AuthScreen() {
               {recovery}
             </Text>
           </View>
-          <Button title="I've saved it — continue" onPress={() => setRecovery(null)} style={{ marginTop: 20 }} />
+          <Text style={styles.tiny}>Tap and hold the code to copy it.</Text>
+          <Button
+            title="I've saved it — continue"
+            onPress={() => {
+              if (pendingUser) finishAuth(pendingUser);
+              setRecovery(null);
+              setPendingUser(null);
+            }}
+            style={{ marginTop: 16 }}
+          />
         </Card>
       </View>
     );
@@ -77,10 +90,10 @@ export function AuthScreen() {
 
         <Card strong style={{ padding: 20, width: "100%", maxWidth: 420, marginTop: 24 }}>
           <View style={styles.tabs}>
-            {(["login", "register", "recover"] as Mode[]).map((m) => (
+            {(["login", "register"] as Mode[]).map((m) => (
               <Pressable key={m} onPress={() => setMode(m)} style={[styles.tab, mode === m && styles.tabActive]}>
                 <Text style={[styles.tabText, mode === m && { color: "#fff" }]}>
-                  {m === "login" ? "Log in" : m === "register" ? "Sign up" : "Recover"}
+                  {m === "login" ? "Log in" : "Sign up"}
                 </Text>
               </Pressable>
             ))}
@@ -89,29 +102,30 @@ export function AuthScreen() {
           <Label>Your name</Label>
           <Input value={name} onChangeText={setName} placeholder="e.g. Raktim" autoCapitalize="words" />
 
-          {mode === "recover" && (
-            <>
-              <Label>Recovery code</Label>
-              <Input value={code} onChangeText={setCode} placeholder="XXXX-XXXX-XXXX-XXXX" autoCapitalize="characters" />
-            </>
-          )}
-
           <View style={{ height: 12 }} />
-          <Label>{mode === "recover" ? "New passphrase" : "Passphrase"}</Label>
+          <Label>Passphrase</Label>
           <Input value={pass} onChangeText={setPass} placeholder="••••••••" secureTextEntry />
 
           <Button
-            title={mode === "login" ? "Log in" : mode === "register" ? "Create account" : "Reset passphrase"}
+            title={mode === "login" ? "Log in" : "Create account"}
             onPress={submit}
             loading={busy}
             style={{ marginTop: 20 }}
           />
+
+          {mode === "login" && (
+            <Pressable onPress={() => setShowRecover(true)} style={{ alignSelf: "center", marginTop: 14 }}>
+              <Text style={styles.forgot}>Forgot your passphrase?</Text>
+            </Pressable>
+          )}
         </Card>
 
         <Text style={styles.footer}>
           No email needed. Your name + passphrase is your account — invite friends by their name.
         </Text>
       </ScrollView>
+
+      <RecoverSheet visible={showRecover} onClose={() => setShowRecover(false)} />
     </KeyboardAvoidingView>
   );
 }
@@ -125,8 +139,10 @@ const styles = StyleSheet.create({
   tabActive: { backgroundColor: "rgba(255,255,255,0.15)" },
   tabText: { color: theme.colors.textFaint, fontWeight: "700" },
   footer: { color: theme.colors.textFaint, fontSize: 12, textAlign: "center", marginTop: 20, maxWidth: 340 },
+  forgot: { color: theme.colors.textDim, fontSize: 13, fontWeight: "600", textDecorationLine: "underline" },
   h1: { color: "#fff", fontSize: 20, fontWeight: "800", textAlign: "center" },
   sub: { color: theme.colors.textDim, textAlign: "center", marginTop: 6 },
+  tiny: { color: theme.colors.textFaint, fontSize: 11, textAlign: "center", marginTop: 10 },
   codeBox: {
     marginTop: 20,
     backgroundColor: "rgba(0,0,0,0.35)",

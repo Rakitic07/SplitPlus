@@ -46,6 +46,16 @@ export function todayInput(): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+// Read a File as a data URL (used to hand a picked image to the cropper).
+export function fileToDataURL(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Couldn't read the image"));
+    reader.onload = () => resolve(reader.result as string);
+    reader.readAsDataURL(file);
+  });
+}
+
 // Downscale an uploaded image to a small JPEG data URL (thumbnail) so it fits
 // comfortably in the DB. Keeps aspect ratio; caps the longest edge.
 export function fileToThumbnail(

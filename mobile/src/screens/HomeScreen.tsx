@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   Image,
   Modal,
@@ -15,8 +15,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { Avatar, Button, Card, Empty, Input, Label, SectionTitle } from "../components/ui";
+import { ExportSheet } from "../components/ExportSheet";
+import { SettingsSheet } from "../components/SettingsSheet";
 import { ShimmerText, SkeletonRows } from "../components/Shimmer";
-import { api, ApiError } from "../lib/api";
+import { api, ApiError, type SearchExpense } from "../lib/api";
 import { formatMoney, CURRENCIES } from "../shared/currency";
 import { GROUP_EMOJIS } from "../shared/categories";
 import { useAuth } from "../state/auth";
@@ -31,7 +33,7 @@ type Incoming = Settlement & { group: { id: string; name: string; emoji?: string
 export function HomeScreen() {
   const nav = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const { success, error } = useToast();
 
   const [groups, setGroups] = useState<GroupSummary[]>([]);
@@ -40,13 +42,21 @@ export function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  const [showExport, setShowExport] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+
+  // Global, cross-group expense search.
+  const [searchQ, setSearchQ] = useState("");
+  const [results, setResults] = useState<SearchExpense[]>([]);
+  const [searching, setSearching] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [g, i, s] = await Promise.all([api.listGroups(), api.myInvites(), api.incomingSettlements()]);
-      setGroups(g.groups);
-      setInvites(i.invites);
-      setIncoming(s.settlements as Incoming[]);
+      // Single combined round-trip (groups + invites + incoming settlements).
+      const d = await api.home();
+      setGroups(d.groups);
+      setInvites(d.invites);
+      setIncoming(d.settlements as Incoming[]);
     } catch {
       /* silent */
     } finally {
@@ -56,6 +66,27 @@ export function HomeScreen() {
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  // The auto update-check + themed popup lives at the app root (UpdateGate).
+
+  // Debounced global search (min 2 chars).
+  useEffect(() => {
+    const t = searchQ.trim();
+    if (t.length < 2) {
+      setResults([]);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    const timer = setTimeout(() => {
+      api
+        .searchExpenses(t)
+        .then((r) => setResults(r.results))
+        .catch(() => setResults([]))
+        .finally(() => setSearching(false));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQ]);
 
   async function respondInvite(inv: PendingInvite, action: "accept" | "decline") {
     setInvites((v) => v.filter((x) => x.id !== inv.id));
@@ -82,16 +113,20 @@ export function HomeScreen() {
     }
   }
 
+  const owedCount = groups.filter((g) => g.net > 0.01).length;
+  const oweCount = groups.filter((g) => g.net < -0.01).length;
+
   return (
     <View style={{ flex: 1 }}>
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Text style={styles.brand}>Split+</Text>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-          {user && <Avatar name={user.name} uri={user.avatar} size={30} />}
-          <Pressable onPress={() => logout().then(() => success("Logged out"))}>
-            <Text style={{ color: theme.colors.textFaint, fontSize: 13 }}>Log out</Text>
-          </Pressable>
-        </View>
+        <Pressable
+          onPress={() => setShowSettings(true)}
+          style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+        >
+          {user && <Avatar name={user.name} uri={user.avatar} size={32} />}
+          <Text style={{ color: theme.colors.textFaint, fontSize: 18, marginTop: -2 }}>⚙︎</Text>
+        </Pressable>
       </View>
 
       <ScrollView
@@ -101,13 +136,74 @@ export function HomeScreen() {
         <Text style={styles.hi}>Hey {user?.name?.split(" ")[0] ?? "there"} 👋</Text>
         {loading ? (
           <ShimmerText style={{ marginTop: 4 }}>Loading your groups…</ShimmerText>
+        ) : groups.length === 0 ? (
+          <Text style={styles.sub}>Create your first group to start splitting.</Text>
         ) : (
           <Text style={styles.sub}>
-            {groups.length === 0
-              ? "Create your first group to start splitting."
-              : `You're in ${groups.length} ${groups.length === 1 ? "group" : "groups"}.`}
+            You're in <Text style={styles.subStrong}>{groups.length}</Text>{" "}
+            {groups.length === 1 ? "group" : "groups"}
+            {owedCount > 0 && (
+              <Text>
+                {" · owed in "}
+                <Text style={{ color: theme.colors.green, fontWeight: "800" }}>{owedCount}</Text>
+              </Text>
+            )}
+            {oweCount > 0 && (
+              <Text>
+                {" · you owe in "}
+                <Text style={{ color: theme.colors.red, fontWeight: "800" }}>{oweCount}</Text>
+              </Text>
+            )}
           </Text>
         )}
+
+        {/* Global expense search */}
+        <View style={{ marginTop: 16 }}>
+          <View style={styles.searchWrap}>
+            <Text style={styles.searchIcon}>🔍</Text>
+            <Input
+              value={searchQ}
+              onChangeText={setSearchQ}
+              placeholder="Search expenses across all groups…"
+              style={styles.searchInput}
+              autoCapitalize="none"
+            />
+            {searchQ.length > 0 && (
+              <Pressable onPress={() => setSearchQ("")} hitSlop={8} style={styles.searchClear}>
+                <Text style={{ color: theme.colors.textFaint, fontSize: 16 }}>✕</Text>
+              </Pressable>
+            )}
+          </View>
+
+          {searchQ.trim().length >= 2 && (
+            <Card style={{ marginTop: 8, padding: 6 }}>
+              {searching ? (
+                <Text style={styles.searchInfo}>Searching…</Text>
+              ) : results.length === 0 ? (
+                <Text style={styles.searchInfo}>No expenses found.</Text>
+              ) : (
+                results.map((r) => (
+                  <Pressable
+                    key={r.id}
+                    style={styles.resultRow}
+                    onPress={() => {
+                      setSearchQ("");
+                      nav.navigate("Group", { groupId: r.groupId, name: r.group.name });
+                    }}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.resultTitle} numberOfLines={1}>{r.title}</Text>
+                      <Text style={styles.resultSub} numberOfLines={1}>
+                        {r.group.emoji ?? "👥"} {r.group.name} · {r.paidBy.name}
+                      </Text>
+                    </View>
+                    <Text style={styles.resultAmt}>{formatMoney(r.group.currency, r.amount)}</Text>
+                  </Pressable>
+                ))
+              )}
+            </Card>
+          )}
+        </View>
 
         {(invites.length > 0 || incoming.length > 0) && (
           <View style={{ gap: 8, marginTop: 16 }}>
@@ -151,7 +247,14 @@ export function HomeScreen() {
         )}
 
         <View style={{ height: 20 }} />
-        <SectionTitle>Your groups</SectionTitle>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <SectionTitle>Your groups</SectionTitle>
+          {!loading && groups.length > 0 && (
+            <Pressable onPress={() => setShowExport(true)} style={styles.exportBtn}>
+              <Text style={styles.exportTxt}>⇩ Export</Text>
+            </Pressable>
+          )}
+        </View>
 
         {loading ? (
           <Card style={{ padding: 8 }}>
@@ -166,12 +269,12 @@ export function HomeScreen() {
             {groups.map((g) => (
               <Pressable key={g.id} onPress={() => nav.navigate("Group", { groupId: g.id, name: g.name })}>
                 <Card>
-                  <View style={{ height: 96 }}>
+                  <View style={{ height: 68 }}>
                     {g.thumbnail ? (
                       <Image source={{ uri: g.thumbnail }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
                     ) : (
                       <LinearGradient colors={theme.gradients.cover} style={styles.coverFallback}>
-                        <Text style={{ fontSize: 44 }}>{g.emoji ?? "👥"}</Text>
+                        <Text style={{ fontSize: 32 }}>{g.emoji ?? "👥"}</Text>
                       </LinearGradient>
                     )}
                   </View>
@@ -221,6 +324,8 @@ export function HomeScreen() {
           nav.navigate("Group", { groupId: g.id, name: g.name });
         }}
       />
+      <ExportSheet visible={showExport} onClose={() => setShowExport(false)} scope="overall" />
+      <SettingsSheet visible={showSettings} onClose={() => setShowSettings(false)} />
     </View>
   );
 }
@@ -332,6 +437,7 @@ const styles = StyleSheet.create({
   brand: { color: "#fff", fontSize: 24, fontWeight: "900", letterSpacing: -0.5 },
   hi: { color: "#fff", fontSize: 22, fontWeight: "800" },
   sub: { color: theme.colors.textDim, marginTop: 4 },
+  subStrong: { color: theme.colors.text, fontWeight: "800" },
   inboxRow: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12 },
   inboxTitle: { color: "#fff", fontWeight: "700", fontSize: 14 },
   inboxSub: { color: theme.colors.textFaint, fontSize: 12, marginTop: 2 },
@@ -342,6 +448,17 @@ const styles = StyleSheet.create({
   groupName: { color: "#fff", fontWeight: "800", fontSize: 17 },
   groupMeta: { color: theme.colors.textFaint, fontSize: 12, marginTop: 3 },
   groupNet: { fontWeight: "800", marginTop: 8 },
+  exportBtn: { flexDirection: "row", alignItems: "center", borderRadius: 999, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: "rgba(255,255,255,0.06)", paddingHorizontal: 12, paddingVertical: 6, marginBottom: 10 },
+  exportTxt: { color: theme.colors.textDim, fontWeight: "700", fontSize: 12 },
+  searchWrap: { flexDirection: "row", alignItems: "center" },
+  searchIcon: { position: "absolute", left: 14, zIndex: 1, fontSize: 14 },
+  searchInput: { flex: 1, paddingLeft: 40 },
+  searchClear: { position: "absolute", right: 12 },
+  searchInfo: { color: theme.colors.textFaint, textAlign: "center", paddingVertical: 14 },
+  resultRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 8, paddingVertical: 10 },
+  resultTitle: { color: "#fff", fontWeight: "700", fontSize: 15 },
+  resultSub: { color: theme.colors.textFaint, fontSize: 12, marginTop: 2 },
+  resultAmt: { color: "#fff", fontWeight: "800" },
   fab: { position: "absolute", right: 20 },
   fabGrad: { width: 56, height: 56, borderRadius: 28, alignItems: "center", justifyContent: "center" },
   modalWrap: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.5)" },

@@ -79,9 +79,178 @@ function dailySeries(
   return [...buckets.entries()].map(([date, v]) => ({ date, count: v.count, total: v.total }));
 }
 
+// ── Storage & host metrics ────────────────────────────────────────────────
+
+type Attachment = { count: number; bytes: number };
+type StorageStats = {
+  provider: "postgresql" | "sqlite";
+  dbBytes: number | null;
+  limitBytes: number | null;
+  tables: { name: string; bytes: number }[];
+  attachments: {
+    avatars: Attachment;
+    groupCovers: Attachment;
+    receipts: Attachment;
+    settlementProofs: Attachment;
+    totalCount: number;
+    totalBytes: number;
+  };
+};
+
+// Real on-disk footprint of the database: total size, per-table sizes (Postgres),
+// and how many bytes each kind of base64 image (avatars, group covers, receipts,
+// settlement proofs) is taking. Best-effort — returns null if the DB rejects the
+// introspection queries rather than breaking the whole dashboard.
+// The generated client's real datasource provider ("postgresql" | "sqlite"),
+// which is authoritative — locally the client connects to SQLite even though the
+// .env DATABASE_URL points at production Postgres, so we must NOT infer from env.
+function activeProvider(): string {
+  return (prisma as unknown as { _activeProvider?: string })._activeProvider ?? "";
+}
+
+async function storageStats(): Promise<StorageStats | null> {
+  const isPg = activeProvider() === "postgresql";
+  const limitMb = Number(process.env.ADMIN_STORAGE_LIMIT_MB ?? "");
+  const limitBytes = Number.isFinite(limitMb) && limitMb > 0 ? limitMb * 1024 * 1024 : null;
+
+  try {
+    if (isPg) {
+      // octet_length gives true byte size of the stored text.
+      const [att] = await prisma.$queryRawUnsafe<
+        {
+          avatar_bytes: number;
+          avatar_count: number;
+          cover_bytes: number;
+          cover_count: number;
+          receipt_bytes: number;
+          receipt_count: number;
+          proof_bytes: number;
+          proof_count: number;
+        }[]
+      >(
+        `SELECT
+           COALESCE((SELECT SUM(octet_length(avatar)) FROM "User"),0)::float8       AS avatar_bytes,
+           (SELECT COUNT(*) FROM "User" WHERE avatar IS NOT NULL)::int              AS avatar_count,
+           COALESCE((SELECT SUM(octet_length(thumbnail)) FROM "Group"),0)::float8   AS cover_bytes,
+           (SELECT COUNT(*) FROM "Group" WHERE thumbnail IS NOT NULL)::int          AS cover_count,
+           COALESCE((SELECT SUM(octet_length(thumbnail)) FROM "Expense"),0)::float8 AS receipt_bytes,
+           (SELECT COUNT(*) FROM "Expense" WHERE thumbnail IS NOT NULL)::int        AS receipt_count,
+           COALESCE((SELECT SUM(octet_length(thumbnail)) FROM "Settlement"),0)::float8 AS proof_bytes,
+           (SELECT COUNT(*) FROM "Settlement" WHERE thumbnail IS NOT NULL)::int     AS proof_count`
+      );
+      const [dbRow] = await prisma.$queryRawUnsafe<{ bytes: number }[]>(
+        `SELECT pg_database_size(current_database())::float8 AS bytes`
+      );
+      const tables = await prisma.$queryRawUnsafe<{ name: string; bytes: number }[]>(
+        `SELECT c.relname AS name, pg_total_relation_size(c.oid)::float8 AS bytes
+           FROM pg_class c
+           JOIN pg_namespace n ON n.oid = c.relnamespace
+          WHERE n.nspname = 'public' AND c.relkind = 'r'
+          ORDER BY bytes DESC`
+      );
+      return buildStorage("postgresql", Number(dbRow?.bytes ?? 0), limitBytes, tables, att);
+    }
+
+    // SQLite (local dev): length() ≈ byte size for ASCII base64; DB size via PRAGMA.
+    const [att] = await prisma.$queryRawUnsafe<
+      {
+        avatar_bytes: number;
+        avatar_count: number;
+        cover_bytes: number;
+        cover_count: number;
+        receipt_bytes: number;
+        receipt_count: number;
+        proof_bytes: number;
+        proof_count: number;
+      }[]
+    >(
+      `SELECT
+         COALESCE((SELECT SUM(length(avatar)) FROM "User"),0)       AS avatar_bytes,
+         (SELECT COUNT(*) FROM "User" WHERE avatar IS NOT NULL)     AS avatar_count,
+         COALESCE((SELECT SUM(length(thumbnail)) FROM "Group"),0)   AS cover_bytes,
+         (SELECT COUNT(*) FROM "Group" WHERE thumbnail IS NOT NULL) AS cover_count,
+         COALESCE((SELECT SUM(length(thumbnail)) FROM "Expense"),0) AS receipt_bytes,
+         (SELECT COUNT(*) FROM "Expense" WHERE thumbnail IS NOT NULL) AS receipt_count,
+         COALESCE((SELECT SUM(length(thumbnail)) FROM "Settlement"),0) AS proof_bytes,
+         (SELECT COUNT(*) FROM "Settlement" WHERE thumbnail IS NOT NULL) AS proof_count`
+    );
+    let dbBytes: number | null = null;
+    try {
+      const [pc] = await prisma.$queryRawUnsafe<{ n: number }[]>(`PRAGMA page_count`);
+      const [ps] = await prisma.$queryRawUnsafe<{ n: number }[]>(`PRAGMA page_size`);
+      // PRAGMA rows come back keyed by the pragma name; read the first value.
+      const pcVal = pc ? Number(Object.values(pc)[0]) : 0;
+      const psVal = ps ? Number(Object.values(ps)[0]) : 0;
+      dbBytes = pcVal > 0 && psVal > 0 ? pcVal * psVal : null;
+    } catch {
+      dbBytes = null;
+    }
+    return buildStorage("sqlite", dbBytes, limitBytes, [], att);
+  } catch {
+    return null;
+  }
+}
+
+// Fold the raw attachment counts/bytes into the response shape.
+function buildStorage(
+  provider: "postgresql" | "sqlite",
+  dbBytes: number | null,
+  limitBytes: number | null,
+  tables: { name: string; bytes: number }[],
+  att: {
+    avatar_bytes: number;
+    avatar_count: number;
+    cover_bytes: number;
+    cover_count: number;
+    receipt_bytes: number;
+    receipt_count: number;
+    proof_bytes: number;
+    proof_count: number;
+  }
+): StorageStats {
+  const avatars = { count: Number(att.avatar_count ?? 0), bytes: Number(att.avatar_bytes ?? 0) };
+  const groupCovers = { count: Number(att.cover_count ?? 0), bytes: Number(att.cover_bytes ?? 0) };
+  const receipts = { count: Number(att.receipt_count ?? 0), bytes: Number(att.receipt_bytes ?? 0) };
+  const settlementProofs = { count: Number(att.proof_count ?? 0), bytes: Number(att.proof_bytes ?? 0) };
+  return {
+    provider,
+    dbBytes,
+    limitBytes,
+    tables: tables.map((t) => ({ name: String(t.name), bytes: Number(t.bytes ?? 0) })),
+    attachments: {
+      avatars,
+      groupCovers,
+      receipts,
+      settlementProofs,
+      totalCount: avatars.count + groupCovers.count + receipts.count + settlementProofs.count,
+      totalBytes: avatars.bytes + groupCovers.bytes + receipts.bytes + settlementProofs.bytes,
+    },
+  };
+}
+
+// Free space of the writable filesystem (os.tmpdir()). On serverless the root
+// image is read-only and always reports ~full, so we probe the temp dir — the
+// only place the app can write — which is the headroom that actually matters.
+async function diskStats(): Promise<{ usedBytes: number; totalBytes: number } | null> {
+  try {
+    const fs = (await import("node:fs/promises")) as unknown as {
+      statfs?: (p: string) => Promise<{ bsize: number; blocks: number; bavail: number }>;
+    };
+    if (!fs.statfs) return null;
+    const s = await fs.statfs(os.tmpdir());
+    const totalBytes = s.blocks * s.bsize;
+    const freeBytes = s.bavail * s.bsize;
+    if (!(totalBytes > 0)) return null;
+    return { usedBytes: Math.max(0, totalBytes - freeBytes), totalBytes };
+  } catch {
+    return null;
+  }
+}
+
 // GET /api/admin/metrics — a rich, Spendly-Plus-style dashboard: platform totals,
 // growth windows, a 14-day trend, top categories / groups / spenders, currency &
-// split-mode mix, engagement, recovery breakdown, and live host stats.
+// split-mode mix, engagement, recovery breakdown, storage footprint, and live
+// host stats.
 adminRouter.get(
   "/metrics",
   ah(async (_req, res) => {
@@ -201,11 +370,20 @@ adminRouter.get(
 
     const grandTotal = expenseAgg._sum.amount ?? 0;
 
-    // Host runtime stats (best-effort; loadavg is 0 on some platforms).
+    // Storage footprint + writable-disk headroom (both best-effort).
+    const [storage, disk] = [await storageStats(), await diskStats()];
+
+    // Host runtime stats (best-effort; loadavg is 0 on serverless).
     const cores = (os.cpus() ?? []).length || 1;
     const load1 = os.loadavg?.()[0] ?? 0;
-    const totalMem = os.totalmem();
-    const usedMem = Math.max(0, totalMem - os.freemem());
+
+    // On Vercel/Lambda the meaningful memory ceiling is the function's configured
+    // size, so measure process RSS against it. Elsewhere fall back to host RAM.
+    const rss = process.memoryUsage().rss;
+    const lambdaMb = Number(process.env.AWS_LAMBDA_FUNCTION_MEMORY_SIZE ?? "");
+    const useProcessMem = Number.isFinite(lambdaMb) && lambdaMb > 0;
+    const memTotal = useProcessMem ? lambdaMb * 1024 * 1024 : os.totalmem();
+    const usedMem = useProcessMem ? rss : Math.max(0, memTotal - os.freemem());
 
     return res.json({
       generatedAt: new Date().toISOString(),
@@ -268,19 +446,21 @@ adminRouter.get(
         approved: resetByStatus.approved ?? 0,
         rejected: resetByStatus.rejected ?? 0,
       },
+      storage,
       system: {
         node: process.version,
         platform: `${os.type()} ${os.release()}`,
         uptimeSec: Math.round(process.uptime()),
         cpuCores: cores,
         loadPct: load1 > 0 ? Math.min(100, (load1 / cores) * 100) : null,
+        memBasis: useProcessMem ? "process" : "host",
         memUsedBytes: usedMem,
-        memTotalBytes: totalMem,
-        rssBytes: process.memoryUsage().rss,
-        dbProvider: (process.env.DATABASE_URL ?? "").startsWith("postgres")
-          ? "postgresql"
-          : "sqlite",
-        region: process.env.VERCEL_REGION ?? null,
+        memTotalBytes: memTotal,
+        rssBytes: rss,
+        diskUsedBytes: disk?.usedBytes ?? null,
+        diskTotalBytes: disk?.totalBytes ?? null,
+        dbProvider: activeProvider() || "unknown",
+        region: process.env.VERCEL_REGION ?? process.env.AWS_REGION ?? null,
       },
     });
   })

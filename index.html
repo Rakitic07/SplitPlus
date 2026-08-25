@@ -3,15 +3,37 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="apple-touch-icon" href="/app-icon.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0a0807" />
-    <title>Split-Plus — Split expenses, beautifully</title>
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Split+" />
+    <title>Split+ — Split expenses, beautifully</title>
     <meta name="description" content="A glassy, modern way to split group expenses with friends. Create groups, split bills any way you like, settle up with confirmation." />
+
+    <!-- Open Graph (WhatsApp / iMessage / Slack / Facebook). Link-preview
+         scrapers require ABSOLUTE https URLs for og:image and og:url. -->
+    <meta property="og:site_name" content="Split+" />
     <meta property="og:title" content="Split+ — Split expenses, beautifully" />
     <meta property="og:description" content="Create groups, split bills any way you like, and settle up with confirmation." />
-    <meta property="og:image" content="/app-icon.png" />
     <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://split-plus.vercel.app/" />
+    <meta property="og:image" content="https://split-plus.vercel.app/og-image.png" />
+    <meta property="og:image:secure_url" content="https://split-plus.vercel.app/og-image.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Split+ — split expenses, beautifully" />
+
+    <!-- Twitter / X large card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Split+ — Split expenses, beautifully" />
+    <meta name="twitter:description" content="Create groups, split bills any way you like, and settle up with confirmation." />
+    <meta name="twitter:image" content="https://split-plus.vercel.app/og-image.png" />
   </head>
   <body>
     <div id="root"></div>

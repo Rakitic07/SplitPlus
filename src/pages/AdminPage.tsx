@@ -12,7 +12,9 @@ import {
   BarChart3,
   Check,
   Cpu,
+  Database,
   HardDrive,
+  Image,
   LifeBuoy,
   RefreshCw,
   ShieldCheck,
@@ -97,9 +99,11 @@ function Stat({
 function BarList({
   items,
   color = "#ffab33",
+  fmt = fmtNum,
 }: {
   items: { label: string; value: number; hint?: string }[];
   color?: string;
+  fmt?: (n: number) => string;
 }) {
   const max = Math.max(1, ...items.map((i) => i.value));
   return (
@@ -110,7 +114,7 @@ function BarList({
           <div className="mb-1 flex items-center justify-between gap-2 text-sm">
             <span className="truncate text-white/80">{it.label}</span>
             <span className="shrink-0 font-semibold text-white/90">
-              {fmtNum(it.value)}
+              {fmt(it.value)}
               {it.hint && <span className="ml-1 text-xs font-normal text-white/40">{it.hint}</span>}
             </span>
           </div>
@@ -151,6 +155,83 @@ function SectionTitle({ icon, children }: { icon: React.ReactNode; children: Rea
       {icon}
       {children}
     </div>
+  );
+}
+
+// ── storage dashboard ────────────────────────────────────────────────────
+function StorageView({ s }: { s: NonNullable<AdminMetrics["storage"]> }) {
+  const a = s.attachments;
+  // Space the DB uses that isn't one of our own tables (system catalogs, WAL…).
+  const tablesBytes = s.tables.reduce((sum, t) => sum + t.bytes, 0);
+  const overhead = s.dbBytes !== null ? Math.max(0, s.dbBytes - tablesBytes) : 0;
+
+  return (
+    <Card className="p-4">
+      <SectionTitle icon={<Database className="h-4 w-4" />}>Storage</SectionTitle>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Stat
+          label="Database size"
+          value={s.dbBytes !== null ? fmtBytes(s.dbBytes) : "n/a"}
+          sub={s.provider}
+          accent="text-orange-300"
+        />
+        <Stat label="Images stored" value={fmtNum(a.totalCount)} sub={fmtBytes(a.totalBytes)} />
+        <Stat label="Receipts" value={fmtNum(a.receipts.count)} sub={fmtBytes(a.receipts.bytes)} />
+        <Stat
+          label="Storage left"
+          value={
+            s.limitBytes !== null && s.dbBytes !== null
+              ? fmtBytes(Math.max(0, s.limitBytes - s.dbBytes))
+              : "—"
+          }
+          sub={s.limitBytes !== null ? `of ${fmtBytes(s.limitBytes)}` : "no cap set"}
+          accent="text-emerald-400"
+        />
+      </div>
+
+      {s.limitBytes !== null && s.dbBytes !== null && (
+        <div className="mt-4">
+          <Meter
+            label="Plan usage"
+            used={s.dbBytes}
+            total={s.limitBytes}
+            sub={`${fmtBytes(s.dbBytes)} / ${fmtBytes(s.limitBytes)}`}
+          />
+        </div>
+      )}
+
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div>
+          <SectionTitle icon={<Image className="h-4 w-4" />}>Images by type</SectionTitle>
+          <BarList
+            color="#f59e0b"
+            fmt={fmtBytes}
+            items={[
+              { label: "Avatars", value: a.avatars.bytes, hint: `· ${a.avatars.count}` },
+              { label: "Group covers", value: a.groupCovers.bytes, hint: `· ${a.groupCovers.count}` },
+              { label: "Receipts", value: a.receipts.bytes, hint: `· ${a.receipts.count}` },
+              { label: "Settlement proofs", value: a.settlementProofs.bytes, hint: `· ${a.settlementProofs.count}` },
+            ]}
+          />
+          <p className="mt-2 text-xs text-white/35">Bars show bytes; counts in muted text.</p>
+        </div>
+
+        {s.tables.length > 0 && (
+          <div>
+            <SectionTitle icon={<HardDrive className="h-4 w-4" />}>Tables on disk</SectionTitle>
+            <BarList
+              color="#a78bfa"
+              fmt={fmtBytes}
+              items={[
+                ...s.tables.slice(0, 8).map((t) => ({ label: t.name, value: t.bytes })),
+                ...(overhead > 0 ? [{ label: "system / WAL", value: overhead }] : []),
+              ]}
+            />
+          </div>
+        )}
+      </div>
+    </Card>
   );
 }
 
@@ -313,19 +394,36 @@ function MetricsView({ m }: { m: AdminMetrics }) {
         </div>
       </Card>
 
+      {/* Storage */}
+      {m.storage && <StorageView s={m.storage} />}
+
       {/* System */}
       <Card className="p-4">
         <SectionTitle icon={<Cpu className="h-4 w-4" />}>Host & runtime</SectionTitle>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-3">
             <Meter
-              label="Memory (host)"
+              label={m.system.memBasis === "process" ? "Memory (function)" : "Memory (host)"}
               used={m.system.memUsedBytes}
               total={m.system.memTotalBytes}
               sub={`RSS ${fmtBytes(m.system.rssBytes)} · ${fmtBytes(m.system.memUsedBytes)} / ${fmtBytes(m.system.memTotalBytes)}`}
             />
-            {m.system.loadPct !== null && (
+            {m.system.loadPct !== null ? (
               <Meter label={`CPU load (${m.system.cpuCores} cores)`} used={m.system.loadPct} total={100} />
+            ) : (
+              <div className="text-sm">
+                <span className="text-white/40">CPU cores: </span>
+                <span className="text-white/85">{m.system.cpuCores}</span>
+                <span className="ml-2 text-xs text-white/35">(load n/a on serverless)</span>
+              </div>
+            )}
+            {m.system.diskTotalBytes !== null && m.system.diskUsedBytes !== null && (
+              <Meter
+                label="Disk (writable /tmp)"
+                used={m.system.diskUsedBytes}
+                total={m.system.diskTotalBytes}
+                sub={`${fmtBytes(m.system.diskUsedBytes)} / ${fmtBytes(m.system.diskTotalBytes)}`}
+              />
             )}
           </div>
           <div className="space-y-1.5 text-sm">

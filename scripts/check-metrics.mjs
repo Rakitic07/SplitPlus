@@ -34,6 +34,13 @@ try {
   const t = data.totals;
   console.log(`✓ metrics OK — users:${t.users} groups:${t.groups} expenses:${t.expenses} ` +
     `series:${data.series.expenses.length}d cats:${data.categories.length} sys:${data.system.node}`);
+  const s = data.storage;
+  if (!s) throw new Error("storage section missing from metrics payload");
+  console.log(`✓ storage OK — provider:${s.provider} db:${s.dbBytes ?? "n/a"}B ` +
+    `images:${s.attachments.totalCount} (${s.attachments.totalBytes}B) tables:${s.tables.length}`);
+  const sy = data.system;
+  console.log(`✓ system OK — mem(${sy.memBasis}):${sy.memUsedBytes}/${sy.memTotalBytes} ` +
+    `cores:${sy.cpuCores} disk:${sy.diskTotalBytes ?? "n/a"}`);
 } catch (e) {
   console.error("✗ metrics check failed:", e.message);
   process.exitCode = 1;

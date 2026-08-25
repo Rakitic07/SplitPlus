@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Copy, LogIn, ShieldCheck, UserPlus } from "lucide-react";
+import { Copy, Download, Github, LogIn, ShieldCheck, UserPlus } from "lucide-react";
 import { Button, Card, Field, Input, PasswordInput } from "@/components/ui";
 import { LogoMark } from "@/components/Logo";
 import { ShimmerHeading } from "@/components/Shimmer";
@@ -9,6 +9,7 @@ import { RecoverModal } from "@/components/RecoverModal";
 import { useAuth } from "@/state/auth";
 import { useToast } from "@/state/toast";
 import { ApiError } from "@/lib/api";
+import { REPO_URL, RELEASE_APK_URL } from "@shared/appVersion";
 import type { SelfUser } from "@shared/types";
 
 type Mode = "login" | "register";
@@ -155,7 +156,26 @@ export function AuthPage() {
           No email needed. Your name + passphrase is your account — invite friends by their name.
         </p>
 
-        <div className="mt-4 text-center">
+        <div className="mt-4 flex items-center justify-center gap-4">
+          {/* GitHub repo */}
+          <a
+            href={REPO_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="View source on GitHub"
+            aria-label="GitHub repository"
+            className="inline-flex items-center text-white/30 transition hover:text-white/60"
+          >
+            <Github className="h-4 w-4" />
+          </a>
+          {/* Download the Android app (latest GitHub release APK) */}
+          <a
+            href={RELEASE_APK_URL}
+            className="inline-flex items-center gap-1.5 text-xs text-white/30 underline-offset-2 transition hover:text-white/60 hover:underline"
+          >
+            <Download className="h-3.5 w-3.5" /> Download app
+          </a>
+          {/* Admin panel */}
           <Link
             to="/admin"
             className="inline-flex items-center gap-1.5 text-xs text-white/30 underline-offset-2 transition hover:text-white/60 hover:underline"

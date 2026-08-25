@@ -1,5 +1,5 @@
 import "react-native-gesture-handler";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { StatusBar } from "expo-status-bar";
 import { View, ActivityIndicator, Text } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -7,8 +7,16 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { NavigationContainer, DarkTheme } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { Background } from "./src/components/Background";
+import { UpdateModal } from "./src/components/UpdateModal";
 import { AuthProvider, useAuth } from "./src/state/auth";
 import { ToastProvider } from "./src/state/toast";
+import {
+  checkForUpdate,
+  cleanupStaleApk,
+  fetchLatest,
+  isAndroid,
+} from "./src/lib/appUpdate";
+import type { AndroidRelease } from "./src/shared/appVersion";
 import { theme } from "./src/theme";
 import type { RootStackParamList } from "./src/navigation";
 import { AuthScreen } from "./src/screens/AuthScreen";
@@ -56,6 +64,33 @@ function Root() {
   );
 }
 
+// Auto-checks for a newer APK when the app opens (Android only) and shows the
+// themed update popup. The download + install happens from the popup.
+function UpdateGate() {
+  const [latest, setLatest] = useState<AndroidRelease | null>(null);
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    if (!isAndroid) return;
+    let alive = true;
+    (async () => {
+      await cleanupStaleApk();
+      const release = await fetchLatest();
+      const { isUpdate } = await checkForUpdate(release);
+      if (alive && isUpdate && release) {
+        setLatest(release);
+        setShow(true);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  if (!latest) return null;
+  return <UpdateModal latest={latest} visible={show} onClose={() => setShow(false)} />;
+}
+
 export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.colors.bg }}>
@@ -65,6 +100,7 @@ export default function App() {
         <ToastProvider>
           <AuthProvider>
             <Root />
+            <UpdateGate />
           </AuthProvider>
         </ToastProvider>
       </SafeAreaProvider>

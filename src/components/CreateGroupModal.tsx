@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { ImagePlus, Loader2, Search, UserPlus, X } from "lucide-react";
+import { Crop, ImagePlus, Loader2, Search, Trash2, UserPlus, X } from "lucide-react";
 import { Modal } from "@/components/Modal";
+import { ImageCropper } from "@/components/ImageCropper";
 import { Avatar, Button, Field, Input } from "@/components/ui";
 import { CURRENCIES } from "@shared/currency";
 import { GROUP_EMOJIS } from "@shared/categories";
 import { api, ApiError } from "@/lib/api";
-import { fileToThumbnail } from "@/lib/utils";
+import { fileToDataURL } from "@/lib/utils";
 import { useAuth } from "@/state/auth";
 import { useToast } from "@/state/toast";
 import type { GroupSummary, PublicUser } from "@shared/types";
@@ -28,6 +29,8 @@ export function CreateGroupModal({
   const [currency, setCurrency] = useState(user?.defaultCurrency ?? "INR");
   const [thumbnail, setThumbnail] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
+  const [cropOpen, setCropOpen] = useState(false);
 
   // Invite-as-you-create.
   const [query, setQuery] = useState("");
@@ -63,6 +66,8 @@ export function CreateGroupModal({
     setEmoji(GROUP_EMOJIS[0]);
     setCurrency(user?.defaultCurrency ?? "INR");
     setThumbnail(null);
+    setCropSrc(null);
+    setCropOpen(false);
     setQuery("");
     setResults([]);
     setInvitees([]);
@@ -79,10 +84,12 @@ export function CreateGroupModal({
 
   async function pickImage(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-picking the same file later
     if (!file) return;
     try {
-      const thumb = await fileToThumbnail(file, 900, 0.72);
-      setThumbnail(thumb);
+      const dataUrl = await fileToDataURL(file);
+      setCropSrc(dataUrl);
+      setCropOpen(true);
     } catch {
       error("Couldn't process that image");
     }
@@ -144,6 +151,28 @@ export function CreateGroupModal({
           <span className="absolute left-3 top-3 text-3xl drop-shadow">{emoji}</span>
         </button>
         <input ref={fileRef} type="file" accept="image/*" hidden onChange={pickImage} />
+
+        {thumbnail && (
+          <div className="-mt-2 flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => {
+                setCropSrc(thumbnail);
+                setCropOpen(true);
+              }}
+              className="flex items-center gap-1.5 text-xs text-white/50 transition hover:text-white"
+            >
+              <Crop className="h-3.5 w-3.5" /> Adjust &amp; center
+            </button>
+            <button
+              type="button"
+              onClick={() => setThumbnail(null)}
+              className="flex items-center gap-1.5 text-xs text-rose-400/70 transition hover:text-rose-400"
+            >
+              <Trash2 className="h-3.5 w-3.5" /> Remove
+            </button>
+          </div>
+        )}
 
         <Field label="Group name">
           <Input
@@ -253,6 +282,17 @@ export function CreateGroupModal({
           <Loader2 className="h-6 w-6 animate-spin text-white/60" />
         </div>
       )}
+
+      <ImageCropper
+        open={cropOpen}
+        src={cropSrc}
+        aspect={16 / 9}
+        onCancel={() => setCropOpen(false)}
+        onDone={(dataUrl) => {
+          setThumbnail(dataUrl);
+          setCropOpen(false);
+        }}
+      />
     </Modal>
   );
 }

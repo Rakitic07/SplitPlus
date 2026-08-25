@@ -101,15 +101,32 @@ export type AdminMetrics = {
     expensesWithReceipt: number;
   };
   recovery: { pending: number; approved: number; rejected: number };
+  storage: {
+    provider: "postgresql" | "sqlite";
+    dbBytes: number | null;
+    limitBytes: number | null;
+    tables: { name: string; bytes: number }[];
+    attachments: {
+      avatars: { count: number; bytes: number };
+      groupCovers: { count: number; bytes: number };
+      receipts: { count: number; bytes: number };
+      settlementProofs: { count: number; bytes: number };
+      totalCount: number;
+      totalBytes: number;
+    };
+  } | null;
   system: {
     node: string;
     platform: string;
     uptimeSec: number;
     cpuCores: number;
     loadPct: number | null;
+    memBasis: "process" | "host";
     memUsedBytes: number;
     memTotalBytes: number;
     rssBytes: number;
+    diskUsedBytes: number | null;
+    diskTotalBytes: number | null;
     dbProvider: string;
     region: string | null;
   };
@@ -128,6 +145,34 @@ export type AdminResetRequest = {
     members: string[];
     expenses: { title: string; amount: number }[];
   };
+};
+
+// A cross-group expense hit from the global search.
+export type SearchExpense = {
+  id: string;
+  groupId: string;
+  title: string;
+  category: string;
+  amount: number;
+  date: string;
+  paidBy: PublicUser;
+  group: { id: string; name: string; emoji: string | null; currency: string };
+};
+
+// A flattened expense across every group the user belongs to — used to build
+// the "overall" PDF / Excel export on the client.
+export type ExportExpense = {
+  id: string;
+  groupId: string;
+  title: string;
+  category: string;
+  amount: number;
+  date: string;
+  notes: string | null;
+  splitMode: string;
+  paidBy: { id: string; name: string };
+  myShare: number;
+  group: { id: string; name: string; emoji: string | null; currency: string };
 };
 
 export class ApiError extends Error {
@@ -246,6 +291,17 @@ export const api = {
       method: "PATCH",
       body: body(patch),
     });
+  },
+
+  // ── Search ────────────────────────────────────────────────────────────
+  // Casual, cross-group expense search. Results carry their group for deep-links.
+  async searchExpenses(q: string) {
+    return req<{ results: SearchExpense[] }>(`/search?q=${encodeURIComponent(q)}`);
+  },
+
+  // Every expense across all of the user's groups, for the "overall" export.
+  async exportExpenses() {
+    return req<{ expenses: ExportExpense[] }>("/export/expenses");
   },
 
   // ── Home / dashboard ──────────────────────────────────────────────────

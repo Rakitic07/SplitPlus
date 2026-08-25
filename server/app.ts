@@ -7,6 +7,8 @@ import { expensesRouter } from "./routes/expenses.js";
 import { settlementsRouter } from "./routes/settlements.js";
 import { adminRouter } from "./routes/admin.js";
 import { homeRouter } from "./routes/home.js";
+import { searchRouter } from "./routes/search.js";
+import { versionRouter } from "./routes/version.js";
 
 const app = express();
 
@@ -38,6 +40,8 @@ app.get("/api/health", async (_req, res) => {
 app.use("/api/auth", authRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api", homeRouter);
+app.use("/api", searchRouter);
+app.use("/api", versionRouter);
 app.use("/api/groups", groupsRouter);
 // These routers declare full `/groups/:groupId/...` (and `/invites`, `/settlements`)
 // paths, so they mount at the /api root.

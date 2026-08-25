@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Bell, Check, Mail, Plus, Users, X } from "lucide-react";
+import { Bell, Check, Download, Loader2, Mail, Plus, Search, Users, X } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 import { Avatar, Button, Card, EmptyState } from "@/components/ui";
 import { ShimmerText, SkeletonCard } from "@/components/Shimmer";
 import { CreateGroupModal } from "@/components/CreateGroupModal";
-import { api, ApiError } from "@/lib/api";
+import { ExportModal } from "@/components/ExportModal";
+import { api, ApiError, type SearchExpense } from "@/lib/api";
 import { formatMoney } from "@shared/currency";
+import { categoryMeta } from "@shared/categories";
+import { fmtDay } from "@/lib/utils";
 import { useAuth } from "@/state/auth";
 import { useToast } from "@/state/toast";
 import type { GroupSummary, PendingInvite, ReminderFrequency, Settlement } from "@shared/types";
@@ -43,6 +46,30 @@ export function HomePage() {
   const [incoming, setIncoming] = useState<IncomingSettlement[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [showExport, setShowExport] = useState(false);
+
+  // Global (cross-group) expense search.
+  const [searchQ, setSearchQ] = useState("");
+  const [results, setResults] = useState<SearchExpense[]>([]);
+  const [searching, setSearching] = useState(false);
+
+  useEffect(() => {
+    const term = searchQ.trim();
+    if (term.length < 2) {
+      setResults([]);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    const t = setTimeout(() => {
+      api
+        .searchExpenses(term)
+        .then((r) => setResults(r.results))
+        .catch(() => setResults([]))
+        .finally(() => setSearching(false));
+    }, 250);
+    return () => clearTimeout(t);
+  }, [searchQ]);
 
   const load = useCallback(async () => {
     try {
@@ -142,6 +169,70 @@ export function HomePage() {
           </p>
         </motion.div>
 
+        {/* Global expense search */}
+        <div className="mt-5">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
+            <input
+              value={searchQ}
+              onChange={(e) => setSearchQ(e.target.value)}
+              placeholder="Search expenses across all your groups…"
+              className="glass-input !pl-10"
+            />
+            {searchQ && (
+              <button
+                type="button"
+                onClick={() => setSearchQ("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 transition hover:text-white/80"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
+          {searchQ.trim().length >= 2 && (
+            <Card className="mt-2 divide-y divide-white/5 p-1">
+              {searching && results.length === 0 ? (
+                <div className="flex items-center justify-center gap-2 py-6 text-sm text-white/50">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Searching…
+                </div>
+              ) : results.length === 0 ? (
+                <div className="py-6 text-center text-sm text-white/45">
+                  No expenses match “{searchQ.trim()}”.
+                </div>
+              ) : (
+                results.map((r) => {
+                  const cat = categoryMeta(r.category);
+                  return (
+                    <button
+                      key={r.id}
+                      onClick={() => navigate(`/g/${r.groupId}?expense=${r.id}`)}
+                      className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition hover:bg-white/5"
+                    >
+                      <div
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-lg"
+                        style={{ background: `${cat.color}26` }}
+                      >
+                        {cat.emoji}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-semibold text-white">{r.title}</div>
+                        <div className="truncate text-xs text-white/45">
+                          {r.paidBy.name} · {formatMoney(r.group.currency, r.amount)} · {fmtDay(r.date)}
+                        </div>
+                      </div>
+                      <span className="flex shrink-0 items-center gap-1 rounded-full bg-white/10 px-2.5 py-1 text-xs text-white/70">
+                        <span>{r.group.emoji ?? "👥"}</span>
+                        <span className="max-w-[8rem] truncate">{r.group.name}</span>
+                      </span>
+                    </button>
+                  );
+                })
+              )}
+            </Card>
+          )}
+        </div>
+
         {/* Settle-up reminder */}
         {showReminder && (
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mt-5">
@@ -234,9 +325,20 @@ export function HomePage() {
 
         {/* Groups grid */}
         <div className="mt-6">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/40">
-            Your groups
-          </h2>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-white/40">
+              Your groups
+            </h2>
+            {!loading && groups.length > 0 && (
+              <button
+                onClick={() => setShowExport(true)}
+                className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/70 transition hover:bg-white/10 hover:text-white"
+                title="Export all expenses"
+              >
+                <Download className="h-3.5 w-3.5" /> Export
+              </button>
+            )}
+          </div>
 
           {loading ? (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -331,6 +433,7 @@ export function HomePage() {
         onClose={() => setShowCreate(false)}
         onCreated={(g) => setGroups((prev) => [g, ...prev])}
       />
+      <ExportModal open={showExport} onClose={() => setShowExport(false)} scope="overall" />
     </div>
   );
 }
