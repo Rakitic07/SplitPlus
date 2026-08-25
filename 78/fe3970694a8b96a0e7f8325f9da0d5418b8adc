@@ -1,0 +1,65 @@
+mobile/src/screens/AuthScreen.tsx
+  s_cb0fba85de97fe::t_b6f423e58d43f4 13
+  s_cb0fba85de97fe::t_fc385c7ecb153d 127-128
+mobile/src/screens/HomeScreen.tsx
+  s_cb0fba85de97fe::t_1fd10dc16fc7c7 18
+  s_cb0fba85de97fe::t_d5d0262bfd85a6 332-333
+  s_cb0fba85de97fe::t_cc2a7df3faf3de 23,35-36,64,66,73-88
+mobile/src/lib/storage.ts
+  s_cb0fba85de97fe::t_79212fe2eb9083 35-51
+mobile/package-lock.json
+  s_cb0fba85de97fe::t_39d4ab0399fb8e 17,5985-5992
+  s_cb0fba85de97fe::t_fb09c8ca434970 5993-5996
+mobile/src/lib/appUpdate.ts
+  s_cb0fba85de97fe::t_6f096b9a13ac8f 49-59
+  s_cb0fba85de97fe::t_cb565021a31de4 21-23
+mobile/src/lib/api.ts
+  s_cb0fba85de97fe::t_55c7fdba95f44f 43-47,53-65,71-83
+mobile/src/components/EditGroupSheet.tsx
+  s_cb0fba85de97fe::t_4a50d0543326d2 6,36-38,49-50,63-69,120-124,166-176
+  s_cb0fba85de97fe::t_a9d6378fe29e8a 54-55,57-59
+  s_cb0fba85de97fe::t_40e16d7fd06434 114-115,118
+mobile/package.json
+  s_cb0fba85de97fe::t_a51350404be44f 19
+mobile/src/screens/GroupScreen.tsx
+  s_cb0fba85de97fe::t_3c480b48677392 769-776
+  s_cb0fba85de97fe::t_66d777c1164579 372-373
+  s_cb0fba85de97fe::t_576a6e579c1dfd 22
+  s_cb0fba85de97fe::t_b724f3222c67c8 29,132-133,146,153-175
+  s_cb0fba85de97fe::t_a5ab070aa56489 320-326,330
+  s_cb0fba85de97fe::t_50c98dc2b0ef72 480,485
+  s_cb0fba85de97fe::t_dfe72e518e3f03 700,706,720-728
+  s_cb0fba85de97fe::t_d4569e839bc118 506-508,513-521
+  s_cb0fba85de97fe::t_a3135861f09d88 1
+  s_cb0fba85de97fe::t_6d7e479d5f427b 563-570
+  s_cb0fba85de97fe::t_51db50fc2ca185 646,652
+mobile/.gitignore
+  s_cb0fba85de97fe::t_9001200f132d04 7-10
+mobile/src/components/AppFooter.tsx
+  s_cb0fba85de97fe::t_2a60deb454db9b 1-80
+mobile/src/components/ImageCropper.tsx
+  s_cb0fba85de97fe::t_6a886fc8f857df 1-2,4-189,193-224,226-252
+  s_cb0fba85de97fe::t_1b0a5b2f5cf684 3
+  s_cb0fba85de97fe::t_45fb5e6bec5746 190-192
+  s_cb0fba85de97fe::t_85f15ad9e29826 225
+mobile/App.tsx
+  s_cb0fba85de97fe::t_092c845347a35a 13,109-114
+  s_cb0fba85de97fe::t_dac46766e57b72 19-20
+  s_cb0fba85de97fe::t_f303f6de045e16 83-87,95-105
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "78fe3970694a8b96a0e7f8325f9da0d5418b8adc",
+  "prompts": {},
+  "sessions": {
+    "s_cb0fba85de97fe": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "734c7345-66fa-44f9-a3c2-de3b88fff4a0",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": null
+    }
+  }
+}
