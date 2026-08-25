@@ -14,7 +14,7 @@ import type { SelfUser } from "@shared/types";
 
 type Mode = "login" | "register";
 
-export function AuthPage() {
+export function AuthPage({ notice }: { notice?: string } = {}) {
   const { login, register, finishAuth } = useAuth();
   const { success, error } = useToast();
 
@@ -94,6 +94,12 @@ export function AuthPage() {
             <ShimmerHeading>Create groups. Split any bill. Settle up with confidence.</ShimmerHeading>
           </p>
         </div>
+
+        {notice && (
+          <div className="mb-4 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-center text-sm font-semibold text-amber-200">
+            {notice}
+          </div>
+        )}
 
         <Card strong className="p-6">
           <div className="mb-5 flex gap-1 rounded-2xl border border-white/10 bg-black/20 p-1">

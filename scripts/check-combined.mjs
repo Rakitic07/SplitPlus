@@ -1,6 +1,7 @@
 // Non-destructive check for the combined /api/home and /api/groups/:id/bootstrap
 // endpoints. Spins up its own users/group/expenses/settlement on a throwaway
 // port and asserts the combined payloads match the individual endpoints.
+import "./_guard-local.mjs"; // refuse to run unless targeting local SQLite
 import { spawn } from "node:child_process";
 
 const PORT = process.env.CHECK_PORT || "8808";

@@ -1,6 +1,7 @@
 // Non-destructive check for the batched GET /api/groups net computation.
 // Creates its own unique users/group/expenses on a throwaway port and asserts
 // the current user's net matches the old per-group balances math.
+import "./_guard-local.mjs"; // refuse to run unless targeting local SQLite
 import { spawn } from "node:child_process";
 
 const PORT = process.env.CHECK_PORT || "8802";

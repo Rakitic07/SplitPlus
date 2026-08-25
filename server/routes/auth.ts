@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "../lib/prisma.js";
 import {
   authSchema,
+  changeNameSchema,
   findSchema,
   recoverSchema,
   resetRequestSchema,
@@ -388,6 +389,128 @@ authRouter.patch(
       select: SELF_SELECT,
     });
     return res.json({ user: selfUser(user) });
+  })
+);
+
+// A user may rename themselves at most twice within any rolling 30-day window.
+const NAME_CHANGE_LIMIT = 2;
+const NAME_CHANGE_WINDOW_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// How many name changes the user has left in the current window, and when the
+// next slot frees up (30 days after the oldest change still inside the window).
+async function nameChangeStatus(userId: string) {
+  const windowStart = new Date(Date.now() - NAME_CHANGE_WINDOW_DAYS * DAY_MS);
+  const recent = await prisma.nameChange.findMany({
+    where: { userId, createdAt: { gte: windowStart } },
+    orderBy: { createdAt: "asc" },
+    select: { createdAt: true },
+  });
+  const used = recent.length;
+  const remaining = Math.max(0, NAME_CHANGE_LIMIT - used);
+  const nextChangeAt =
+    remaining > 0 || recent.length === 0
+      ? null
+      : new Date(recent[0].createdAt.getTime() + NAME_CHANGE_WINDOW_DAYS * DAY_MS);
+  return {
+    limit: NAME_CHANGE_LIMIT,
+    windowDays: NAME_CHANGE_WINDOW_DAYS,
+    used,
+    remaining,
+    nextChangeAt: nextChangeAt ? nextChangeAt.toISOString() : null,
+  };
+}
+
+// GET /api/auth/name-status — remaining name changes for the current window.
+authRouter.get(
+  "/name-status",
+  requireAuth,
+  ah(async (req, res) => {
+    const r = req as AuthedRequest;
+    return res.json(await nameChangeStatus(r.session.userId));
+  })
+);
+
+// PATCH /api/auth/name — change the display name (max 2 / 30 days), guarding
+// case-insensitive uniqueness against every other account.
+authRouter.patch(
+  "/name",
+  requireAuth,
+  ah(async (req, res) => {
+    const r = req as AuthedRequest;
+    const parsed = changeNameSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: zodMessage(parsed.error) });
+
+    const newName = parsed.data.name; // trimmed by zod
+    const newKey = newName.toLowerCase();
+
+    const me = await prisma.user.findUnique({
+      where: { id: r.session.userId },
+      select: { name: true, nameKey: true },
+    });
+    if (!me) return res.status(404).json({ error: "Account not found." });
+
+    // Case/spacing-only tweak of your OWN name: allowed freely — no clash is
+    // possible and it doesn't consume the rename quota.
+    if (newKey === me.nameKey) {
+      if (newName === me.name) {
+        return res.status(400).json({ error: "That's already your name." });
+      }
+      const updated = await prisma.user.update({
+        where: { id: r.session.userId },
+        data: { name: newName },
+        select: SELF_SELECT,
+      });
+      const token = await createSession(res, { userId: updated.id, name: updated.name });
+      return res.json({ user: selfUser(updated), status: await nameChangeStatus(updated.id), token });
+    }
+
+    // A real rename → enforce the rolling limit before touching anything.
+    const status = await nameChangeStatus(r.session.userId);
+    if (status.remaining <= 0) {
+      const when = status.nextChangeAt
+        ? new Date(status.nextChangeAt).toLocaleDateString("en-GB", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          })
+        : "later";
+      return res.status(429).json({
+        error: `You can change your name at most ${NAME_CHANGE_LIMIT} times every ${NAME_CHANGE_WINDOW_DAYS} days. You can change it again on ${when}.`,
+        status,
+      });
+    }
+
+    // Case-insensitive uniqueness against everyone else.
+    const clash = await prisma.user.findUnique({
+      where: { nameKey: newKey },
+      select: { id: true },
+    });
+    if (clash) {
+      return res.status(409).json({ error: "That name is already taken. Try another one." });
+    }
+
+    try {
+      const updated = await prisma.$transaction(async (tx) => {
+        const u = await tx.user.update({
+          where: { id: r.session.userId },
+          data: { name: newName, nameKey: newKey },
+          select: SELF_SELECT,
+        });
+        await tx.nameChange.create({
+          data: { userId: r.session.userId, oldName: me.name, newName },
+        });
+        return u;
+      });
+      const token = await createSession(res, { userId: updated.id, name: updated.name });
+      return res.json({ user: selfUser(updated), status: await nameChangeStatus(updated.id), token });
+    } catch (err) {
+      // Unique-constraint race: someone grabbed the name between check and write.
+      if (typeof err === "object" && err && (err as { code?: string }).code === "P2002") {
+        return res.status(409).json({ error: "That name was just taken. Try another one." });
+      }
+      throw err;
+    }
   })
 );
 

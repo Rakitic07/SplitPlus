@@ -2,8 +2,8 @@ import React, { useEffect, useState } from "react";
 import { Image, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
-import { Avatar, Button, Label } from "./ui";
-import { api, ApiError } from "../lib/api";
+import { Avatar, Button, Input, Label } from "./ui";
+import { api, ApiError, type NameChangeStatus } from "../lib/api";
 import { CURRENCIES } from "../shared/currency";
 import { useAuth } from "../state/auth";
 import { useToast } from "../state/toast";
@@ -31,13 +31,58 @@ export function SettingsSheet({ visible, onClose }: { visible: boolean; onClose:
   );
   const [busy, setBusy] = useState(false);
 
+  // Display-name editing (rate-limited to 2 / 30 days server-side).
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(user?.name ?? "");
+  const [nameBusy, setNameBusy] = useState(false);
+  const [nameStatus, setNameStatus] = useState<NameChangeStatus | null>(null);
+
   useEffect(() => {
     if (!visible || !user) return;
     setAvatar(user.avatar ?? null);
     setCurrency(user.defaultCurrency);
     setReminderEnabled(user.reminderEnabled);
     setReminderFrequency(user.reminderFrequency);
+    setEditingName(false);
+    setNameDraft(user.name);
+    api.nameStatus().then(setNameStatus).catch(() => setNameStatus(null));
   }, [visible, user]);
+
+  async function saveName() {
+    if (!user) return;
+    const next = nameDraft.trim();
+    if (!next || next === user.name) {
+      setEditingName(false);
+      setNameDraft(user.name);
+      return;
+    }
+    setNameBusy(true);
+    try {
+      const { user: updated, status } = await api.changeName(next);
+      setUser(updated);
+      setNameStatus(status);
+      setEditingName(false);
+      success("Name updated");
+    } catch (err) {
+      error(err instanceof ApiError ? err.message : "Couldn't change name");
+    } finally {
+      setNameBusy(false);
+    }
+  }
+
+  const nameHint = nameStatus
+    ? nameStatus.remaining > 0
+      ? `${nameStatus.remaining} of ${nameStatus.limit} name changes left in the next ${nameStatus.windowDays} days.`
+      : `Limit reached — change it again on ${
+          nameStatus.nextChangeAt
+            ? new Date(nameStatus.nextChangeAt).toLocaleDateString("en-GB", {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+              })
+            : "later"
+        }.`
+    : "You can change your name up to twice a month.";
 
   async function pick() {
     const res = await ImagePicker.launchImageLibraryAsync({
@@ -102,6 +147,31 @@ export function SettingsSheet({ visible, onClose }: { visible: boolean; onClose:
                 </View>
               </View>
             </View>
+
+            <View style={{ height: 18 }} />
+            <Label>Display name</Label>
+            {editingName ? (
+              <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+                <View style={{ flex: 1 }}>
+                  <Input value={nameDraft} onChangeText={setNameDraft} maxLength={40} placeholder="Your name" autoFocus />
+                </View>
+                <Button title="Save" onPress={saveName} loading={nameBusy} style={{ paddingHorizontal: 16 }} />
+              </View>
+            ) : (
+              <View style={styles.nameRow}>
+                <Text style={styles.nameVal} numberOfLines={1}>{user.name}</Text>
+                <Pressable
+                  onPress={() => {
+                    setNameDraft(user.name);
+                    setEditingName(true);
+                  }}
+                  disabled={nameStatus?.remaining === 0}
+                >
+                  <Text style={[styles.nameEdit, nameStatus?.remaining === 0 && { opacity: 0.4 }]}>Edit</Text>
+                </Pressable>
+              </View>
+            )}
+            <Text style={[styles.hint, { marginTop: 6 }]}>{nameHint}</Text>
 
             <View style={{ height: 18 }} />
             <Label>Default currency</Label>
@@ -175,6 +245,9 @@ const styles = StyleSheet.create({
   name: { color: "#fff", fontSize: 18, fontWeight: "800" },
   link: { color: theme.colors.primary2, fontWeight: "700", fontSize: 13 },
   hint: { color: theme.colors.textFaint, fontSize: 12, marginBottom: 6 },
+  nameRow: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: "rgba(255,255,255,0.05)", borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderColor: theme.colors.border },
+  nameVal: { color: "#fff", fontWeight: "800", fontSize: 15, flex: 1 },
+  nameEdit: { color: theme.colors.primary2, fontWeight: "800", fontSize: 13 },
   cur: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.06)" },
   curActive: { backgroundColor: "rgba(255,255,255,0.2)", borderWidth: 1, borderColor: "rgba(255,255,255,0.5)" },
   toggleRow: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: "rgba(255,255,255,0.05)", borderRadius: 18, padding: 14, borderWidth: 1, borderColor: theme.colors.border },

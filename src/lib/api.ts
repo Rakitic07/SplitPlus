@@ -61,6 +61,15 @@ export type ResetQuestionnaire = {
 
 export type ResetStatus = "pending" | "approved" | "rejected";
 
+// How many display-name changes remain in the rolling window.
+export type NameChangeStatus = {
+  limit: number;
+  windowDays: number;
+  used: number;
+  remaining: number;
+  nextChangeAt: string | null;
+};
+
 // A snapshot of platform-wide metrics for the admin dashboard.
 export type AdminMetrics = {
   generatedAt: string;
@@ -145,6 +154,30 @@ export type AdminResetRequest = {
     members: string[];
     expenses: { title: string; amount: number }[];
   };
+};
+
+// A user row in the admin "Users" management tab.
+export type AdminUser = {
+  id: string;
+  name: string;
+  hasAvatar: boolean;
+  defaultCurrency: string;
+  createdAt: string;
+  memberships: number;
+  ownedGroups: number;
+  paidExpenses: number;
+};
+
+// A group row in the admin "Groups" management tab.
+export type AdminGroup = {
+  id: string;
+  name: string;
+  emoji: string | null;
+  currency: string;
+  createdAt: string;
+  owner: { id: string; name: string } | null;
+  members: number;
+  expenses: number;
 };
 
 // A cross-group expense hit from the global search.
@@ -276,6 +309,46 @@ export const api = {
       body: body({ action }),
     });
   },
+  // ── Admin: user & group management ─────────────────────────────────────
+  async adminListUsers(secret: string, q = "") {
+    return req<{ users: AdminUser[] }>(`/admin/users?q=${encodeURIComponent(q)}`, {
+      headers: { "x-admin-secret": secret },
+    });
+  },
+  async adminUpdateUser(secret: string, id: string, name: string) {
+    return req<{ user: { id: string; name: string } }>(`/admin/users/${id}`, {
+      method: "PATCH",
+      headers: { "x-admin-secret": secret },
+      body: body({ name }),
+    });
+  },
+  async adminDeleteUser(secret: string, id: string) {
+    return req<{ ok: true }>(`/admin/users/${id}`, {
+      method: "DELETE",
+      headers: { "x-admin-secret": secret },
+    });
+  },
+  async adminListGroups(secret: string, q = "") {
+    return req<{ groups: AdminGroup[] }>(`/admin/groups?q=${encodeURIComponent(q)}`, {
+      headers: { "x-admin-secret": secret },
+    });
+  },
+  async adminUpdateGroup(
+    secret: string,
+    id: string,
+    patch: { name?: string; currency?: string; emoji?: string }
+  ) {
+    return req<{ group: { id: string; name: string; emoji: string | null; currency: string } }>(
+      `/admin/groups/${id}`,
+      { method: "PATCH", headers: { "x-admin-secret": secret }, body: body(patch) }
+    );
+  },
+  async adminDeleteGroup(secret: string, id: string) {
+    return req<{ ok: true }>(`/admin/groups/${id}`, {
+      method: "DELETE",
+      headers: { "x-admin-secret": secret },
+    });
+  },
   async logout() {
     try {
       await req("/auth/logout", { method: "POST" });
@@ -291,6 +364,19 @@ export const api = {
       method: "PATCH",
       body: body(patch),
     });
+  },
+  // How many display-name changes are left in the current 30-day window.
+  async nameStatus() {
+    return req<NameChangeStatus>("/auth/name-status");
+  },
+  // Change the display name (max 2 / 30 days; must be unique).
+  async changeName(name: string) {
+    const data = await req<{ user: SelfUser; status: NameChangeStatus; token?: string }>(
+      "/auth/name",
+      { method: "PATCH", body: body({ name }) }
+    );
+    if (data.token) setToken(data.token);
+    return data;
   },
 
   // ── Search ────────────────────────────────────────────────────────────
@@ -387,6 +473,25 @@ export const api = {
       `/groups/${groupId}/invites`,
       { method: "POST", body: body({ name }) }
     );
+  },
+
+  // ── Join links ────────────────────────────────────────────────────────
+  // Public preview of a group behind a shareable join link (works while guest).
+  async joinPreview(token: string) {
+    return req<{ group: { id: string; name: string; emoji: string | null; memberCount: number } }>(
+      `/join/${encodeURIComponent(token)}`
+    );
+  },
+  // Join the group the link points to (idempotent). Requires being signed in.
+  async joinGroup(token: string) {
+    return req<{ ok: boolean; groupId: string; alreadyMember: boolean }>(
+      `/join/${encodeURIComponent(token)}`,
+      { method: "POST" }
+    );
+  },
+  // The group's current shareable link token (created on first request).
+  async getJoinLink(groupId: string) {
+    return req<{ token: string }>(`/groups/${groupId}/join-link`);
   },
 
   // ── Expenses ──────────────────────────────────────────────────────────

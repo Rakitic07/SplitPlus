@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Animated,
@@ -19,12 +19,14 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Avatar, Button, Card, Empty, Input, Label, SectionTitle } from "../components/ui";
+import { AppFooter } from "../components/AppFooter";
 import { ExportSheet } from "../components/ExportSheet";
 import { MembersSheet } from "../components/MembersSheet";
 import { EditGroupSheet } from "../components/EditGroupSheet";
 import { ShimmerText, SkeletonRows } from "../components/Shimmer";
 import { BalanceBars, CategoryDonut, PaidByBars } from "../components/charts";
 import { api, ApiError, APP_URL } from "../lib/api";
+import { storage } from "../lib/storage";
 import { formatMoney } from "../shared/currency";
 import { categoryMeta } from "../shared/categories";
 import { fmtDay } from "../lib/utils";
@@ -127,6 +129,8 @@ export function GroupScreen() {
     [shiftTab]
   );
 
+  const cacheKey = `splitplus_cache_group_${groupId}`;
+
   const load = useCallback(async () => {
     try {
       // Single combined round-trip (detail + expenses + balances + settlements
@@ -139,13 +143,36 @@ export function GroupScreen() {
       setMyNet(d.myNet);
       setSettlements(d.settlements);
       setStats(d.stats ?? null);
+      storage.setJSON(cacheKey, d);
     } catch (err) {
       error(err instanceof ApiError ? err.message : "Couldn't load group");
       if (err instanceof ApiError && err.status === 404) nav.goBack();
     } finally {
       setLoading(false);
     }
-  }, [groupId, error, nav]);
+  }, [groupId, error, nav, cacheKey]);
+
+  // Stale-while-revalidate: paint the last-known group instantly instead of a
+  // 20-30s shimmer when the backend is cold, then refresh in the background.
+  useEffect(() => {
+    let alive = true;
+    storage
+      .getJSON<Awaited<ReturnType<typeof api.groupBootstrap>>>(cacheKey)
+      .then((d) => {
+        if (!alive || !d) return;
+        setGroup(d.group);
+        setExpenses(d.expenses);
+        setBalances(d.balances);
+        setDebts(d.debts);
+        setMyNet(d.myNet);
+        setSettlements(d.settlements);
+        setStats(d.stats ?? null);
+        setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [cacheKey]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -234,8 +261,17 @@ export function GroupScreen() {
             {group ? `${group.emoji ?? ""} ${group.name}` : "…"}
           </Text>
           {group && (
-            <Pressable onPress={() => setShowMembers(true)} hitSlop={8}>
-              <Text style={styles.members}>
+            <Pressable onPress={() => setShowMembers(true)} hitSlop={8} style={styles.memberRow}>
+              {group.members.length > 0 && (
+                <View style={styles.avatarStack}>
+                  {group.members.slice(0, 2).map((m, i) => (
+                    <View key={m.id} style={[styles.stackRing, i > 0 && { marginLeft: -8 }]}>
+                      <Avatar name={m.name} uri={m.avatar} size={22} />
+                    </View>
+                  ))}
+                </View>
+              )}
+              <Text style={[styles.members, { marginTop: 0 }]}>
                 {group.members.length} {group.members.length === 1 ? "member" : "members"} ›
               </Text>
             </Pressable>
@@ -290,13 +326,31 @@ export function GroupScreen() {
               }),
             }}
           >
-          {loading ? (
+          {/* Expenses & Activity render their own search bar even while loading,
+              so the search field is never hidden behind a full-tab skeleton. */}
+          {tab === "expenses" ? (
+            <ExpensesView
+              expenses={expenses}
+              currency={currency}
+              myId={myId}
+              loading={loading}
+              onEdit={(id) => nav.navigate("ExpenseForm", { groupId, expenseId: id })}
+            />
+          ) : tab === "activity" ? (
+            <ActivityView
+              expenses={expenses}
+              settlements={settlements}
+              currency={currency}
+              myId={myId}
+              onRespond={respondSettlement}
+              onEditExpense={(id) => nav.navigate("ExpenseForm", { groupId, expenseId: id })}
+              loading={loading}
+            />
+          ) : loading ? (
             <Card style={{ padding: 8 }}>
               <SkeletonRows count={5} />
             </Card>
-          ) : !group ? null : tab === "expenses" ? (
-            <ExpensesView expenses={expenses} currency={currency} myId={myId} />
-          ) : tab === "balances" ? (
+          ) : !group ? null : tab === "balances" ? (
             <BalancesView debts={debts} balances={balances} currency={currency} myId={myId} />
           ) : tab === "charts" ? (
             expenses.length === 0 ? (
@@ -319,8 +373,6 @@ export function GroupScreen() {
                 </Card>
               </View>
             )
-          ) : tab === "activity" ? (
-            <ActivityView settlements={settlements} currency={currency} myId={myId} onRespond={respondSettlement} />
           ) : (
             <InfoView
               group={group}
@@ -340,6 +392,8 @@ export function GroupScreen() {
             </Text>
           </Pressable>
         )}
+
+        <AppFooter />
       </ScrollView>
 
       <Pressable style={[styles.fab, { bottom: insets.bottom + 20 }]} onPress={() => nav.navigate("ExpenseForm", { groupId })}>
@@ -446,10 +500,14 @@ function ExpensesView({
   expenses,
   currency,
   myId,
+  loading,
+  onEdit,
 }: {
   expenses: Expense[];
   currency: string;
   myId: string;
+  loading?: boolean;
+  onEdit?: (expenseId: string) => void;
 }) {
   const [q, setQ] = useState("");
   const [page, setPage] = useState(0);
@@ -470,18 +528,22 @@ function ExpensesView({
   const safePage = Math.min(page, pages - 1);
   const slice = filtered.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
 
-  if (expenses.length === 0) {
-    return (
-      <Card>
-        <Empty emoji="🧾" title="No expenses yet" subtitle="Tap Add to log your first shared expense." />
-      </Card>
-    );
-  }
+  // Still fetching with nothing cached — keep the search bar visible and only
+  // skeleton the list area (so the tab never looks "missing" during a slow load).
+  const showSkeleton = !!loading && expenses.length === 0;
 
   return (
     <View style={{ gap: 12 }}>
       <SearchField value={q} onChange={(v) => { setQ(v); setPage(0); }} placeholder="Search expenses…" />
-      {filtered.length === 0 ? (
+      {showSkeleton ? (
+        <Card style={{ padding: 8 }}>
+          <SkeletonRows count={5} />
+        </Card>
+      ) : expenses.length === 0 ? (
+        <Card>
+          <Empty emoji="🧾" title="No expenses yet" subtitle="Tap Add to log your first shared expense." />
+        </Card>
+      ) : filtered.length === 0 ? (
         <Card>
           <Empty emoji="🔍" title="No matches" subtitle="Try a different search." />
         </Card>
@@ -492,7 +554,7 @@ function ExpensesView({
             const myShare = e.shares.find((s) => s.userId === myId)?.amount ?? 0;
             const net = (e.paidBy.id === myId ? e.amount : 0) - myShare;
             return (
-              <View key={e.id} style={styles.expRow}>
+              <Pressable key={e.id} style={styles.expRow} onPress={() => onEdit?.(e.id)}>
                 <View style={[styles.expIcon, { backgroundColor: cat.color + "26" }]}>
                   <Text style={{ fontSize: 18 }}>{cat.emoji}</Text>
                 </View>
@@ -518,17 +580,19 @@ function ExpensesView({
                     </>
                   )}
                 </View>
-              </View>
+              </Pressable>
             );
           })}
         </Card>
       )}
-      <Pager
-        page={safePage}
-        pages={pages}
-        onPrev={() => setPage((p) => Math.max(0, p - 1))}
-        onNext={() => setPage((p) => Math.min(pages - 1, p + 1))}
-      />
+      {!showSkeleton && (
+        <Pager
+          page={safePage}
+          pages={pages}
+          onPrev={() => setPage((p) => Math.max(0, p - 1))}
+          onNext={() => setPage((p) => Math.min(pages - 1, p + 1))}
+        />
+      )}
     </View>
   );
 }
@@ -599,22 +663,39 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 
 // Activity tab: browse settlements by month (‹ / ›) with a search bar and
 // paginated results — matches the web ActivityTab.
+type ActivityItem =
+  | { kind: "expense"; id: string; at: string; exp: Expense }
+  | { kind: "settlement"; id: string; at: string; st: Settlement };
+
 function ActivityView({
+  expenses,
   settlements,
   currency,
   myId,
   onRespond,
+  onEditExpense,
+  loading,
 }: {
+  expenses: Expense[];
   settlements: Settlement[];
   currency: string;
   myId: string;
   onRespond: (s: Settlement, action: "approve" | "decline") => void;
+  onEditExpense?: (id: string) => void;
+  loading?: boolean;
 }) {
-  // Start on the month of the most recent settlement (or today).
+  // Unified, newest-first feed of expenses added + settlements.
+  const items = useMemo<ActivityItem[]>(() => {
+    const ex: ActivityItem[] = expenses.map((e) => ({ kind: "expense", id: `e-${e.id}`, at: e.createdAt, exp: e }));
+    const se: ActivityItem[] = settlements.map((s) => ({ kind: "settlement", id: `s-${s.id}`, at: s.createdAt, st: s }));
+    return [...ex, ...se].sort((a, b) => +new Date(b.at) - +new Date(a.at));
+  }, [expenses, settlements]);
+
+  // Start on the month of the most recent activity item (or today).
   const initial = useMemo(() => {
-    const d = settlements[0] ? new Date(settlements[0].createdAt) : new Date();
+    const d = items[0] ? new Date(items[0].at) : new Date();
     return { y: d.getFullYear(), m: d.getMonth() };
-  }, [settlements]);
+  }, [items]);
   const [ym, setYm] = useState(initial);
   const [q, setQ] = useState("");
   const [page, setPage] = useState(0);
@@ -623,20 +704,24 @@ function ActivityView({
 
   const filtered = useMemo(() => {
     const t = q.trim().toLowerCase();
-    return settlements.filter((s) => {
+    return items.filter((it) => {
       if (t) {
         const hit =
-          s.from.name.toLowerCase().includes(t) ||
-          s.to.name.toLowerCase().includes(t) ||
-          s.status.toLowerCase().includes(t) ||
-          (s.note ?? "").toLowerCase().includes(t);
-        if (!hit) return false;
-        return true; // search spans every month
+          it.kind === "expense"
+            ? it.exp.title.toLowerCase().includes(t) ||
+              it.exp.category.toLowerCase().includes(t) ||
+              (it.exp.notes ?? "").toLowerCase().includes(t) ||
+              it.exp.paidBy.name.toLowerCase().includes(t)
+            : it.st.from.name.toLowerCase().includes(t) ||
+              it.st.to.name.toLowerCase().includes(t) ||
+              it.st.status.toLowerCase().includes(t) ||
+              (it.st.note ?? "").toLowerCase().includes(t);
+        return hit; // search spans every month
       }
-      const d = new Date(s.createdAt);
+      const d = new Date(it.at);
       return d.getFullYear() === ym.y && d.getMonth() === ym.m;
     });
-  }, [settlements, q, ym]);
+  }, [items, q, ym]);
 
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, pages - 1);
@@ -656,19 +741,13 @@ function ActivityView({
     declined: theme.colors.red,
   };
 
-  if (settlements.length === 0) {
-    return (
-      <Card>
-        <Empty emoji="💸" title="No payments yet" subtitle="Settlements show here, pending confirmation." />
-      </Card>
-    );
-  }
+  const showSkeleton = !!loading && items.length === 0;
 
   return (
     <View style={{ gap: 12 }}>
-      <SearchField value={q} onChange={(v) => { setQ(v); setPage(0); }} placeholder="Search payments…" />
+      <SearchField value={q} onChange={(v) => { setQ(v); setPage(0); }} placeholder="Search activity…" />
 
-      {!searching && (
+      {!searching && !showSkeleton && items.length > 0 && (
         <View style={styles.monthNav}>
           <Pressable onPress={() => shiftMonth(-1)} style={styles.monthBtn} hitSlop={8}>
             <Text style={styles.monthArrow}>‹</Text>
@@ -682,21 +761,51 @@ function ActivityView({
         </View>
       )}
 
-      {filtered.length === 0 ? (
+      {showSkeleton ? (
+        <Card style={{ padding: 8 }}>
+          <SkeletonRows count={5} />
+        </Card>
+      ) : items.length === 0 ? (
+        <Card>
+          <Empty emoji="🕑" title="No activity yet" subtitle="Add an expense or settle up — it all shows here." />
+        </Card>
+      ) : filtered.length === 0 ? (
         <Card>
           <Empty
             emoji={searching ? "🔍" : "🗓️"}
-            title={searching ? "No matches" : "No payments this month"}
+            title={searching ? "No matches" : "Nothing this month"}
             subtitle={searching ? "Try a different search." : "Use ‹ › to browse other months."}
           />
         </Card>
       ) : (
         <Card style={{ padding: 6 }}>
-          {slice.map((s) => {
+          {slice.map((it) => {
+            if (it.kind === "expense") {
+              const e = it.exp;
+              const cat = categoryMeta(e.category);
+              return (
+                <Pressable key={it.id} style={styles.expRow} onPress={() => onEditExpense?.(e.id)}>
+                  <View style={[styles.expIcon, { backgroundColor: cat.color + "26" }]}>
+                    <Text style={{ fontSize: 18 }}>{cat.emoji}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.expTitle} numberOfLines={1}>
+                      {e.paidBy.id === myId ? "You" : e.paidBy.name} added “{e.title}”
+                    </Text>
+                    <Text style={styles.expSub} numberOfLines={1}>
+                      {fmtDay(e.createdAt)} · {cat.name}
+                    </Text>
+                  </View>
+                  <Text style={[styles.expAmt, { color: "#fff" }]}>{formatMoney(currency, e.amount)}</Text>
+                </Pressable>
+              );
+            }
+
+            const s = it.st;
             const canAct = s.status === "pending" && s.to.id === myId;
             return (
-              <View key={s.id} style={styles.expRow}>
-                <View style={[styles.expIcon, { backgroundColor: "rgba(255,138,61,0.15)" }]}>
+              <View key={it.id} style={styles.expRow}>
+                <View style={[styles.expIcon, { backgroundColor: "rgba(56,217,169,0.15)" }]}>
                   <Text style={{ fontSize: 18 }}>💸</Text>
                 </View>
                 <View style={{ flex: 1 }}>
@@ -723,12 +832,14 @@ function ActivityView({
           })}
         </Card>
       )}
-      <Pager
-        page={safePage}
-        pages={pages}
-        onPrev={() => setPage((p) => Math.max(0, p - 1))}
-        onNext={() => setPage((p) => Math.min(pages - 1, p + 1))}
-      />
+      {!showSkeleton && (
+        <Pager
+          page={safePage}
+          pages={pages}
+          onPrev={() => setPage((p) => Math.max(0, p - 1))}
+          onNext={() => setPage((p) => Math.min(pages - 1, p + 1))}
+        />
+      )}
     </View>
   );
 }
@@ -911,19 +1022,34 @@ function InviteModal({
   const [results, setResults] = useState<PublicUser[]>([]);
   const [pending, setPending] = useState<{ id: string; invitee: PublicUser }[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
+  const [joinUrl, setJoinUrl] = useState<string | null>(null);
 
-  // A shareable nudge — there's no public join link (invites are accepted
-  // in-app), so this points friends to sign in and check their invites.
+  // The group's private join link — opening it lets friends sign in and land
+  // straight in the group. Falls back to the app URL until the link loads.
   const inviteMessage = `Hey! Join me on Split+${
     groupName ? ` for "${groupName}"` : ""
-  } so we can split our expenses. Open ${APP_URL}, sign in with your name, and accept the invite from your home screen. 💸`;
+  } so we can split our expenses. ${
+    joinUrl
+      ? `Tap this link, sign in with your name, and you're in: ${joinUrl}`
+      : `Open ${APP_URL}, sign in, and accept the invite from your home screen.`
+  } 💸`;
 
   useFocusEffect(
     useCallback(() => {
       if (!visible) return;
       api.groupInvites(groupId).then((r) => setPending(r.invites)).catch(() => {});
+      api.getJoinLink(groupId).then((r) => setJoinUrl(`${APP_URL}/join/${r.token}`)).catch(() => {});
     }, [visible, groupId])
   );
+
+  async function shareLink() {
+    if (!joinUrl) return;
+    try {
+      await Share.share({ message: joinUrl });
+    } catch {
+      /* user cancelled */
+    }
+  }
 
   // Debounced user search (min 3 chars).
   React.useEffect(() => {
@@ -1009,7 +1135,15 @@ function InviteModal({
             )}
 
             <View style={styles.shareBox}>
-              <Text style={styles.shareTitle}>Or share an invite</Text>
+              <Text style={styles.shareTitle}>Or share an invite link</Text>
+              {joinUrl && (
+                <Pressable onPress={shareLink} style={styles.linkRow}>
+                  <Text style={{ color: theme.colors.textDim, flex: 1, fontSize: 12 }} numberOfLines={1}>
+                    {joinUrl}
+                  </Text>
+                  <Text style={{ color: theme.colors.primary, fontWeight: "800", fontSize: 12 }}>Share</Text>
+                </Pressable>
+              )}
               <View style={{ flexDirection: "row", gap: 8 }}>
                 <Pressable onPress={shareWhatsApp} style={[styles.shareBtn, { backgroundColor: "#25D366" }]}>
                   <Text style={{ color: "#000", fontWeight: "800" }}>WhatsApp</Text>
@@ -1051,6 +1185,9 @@ const styles = StyleSheet.create({
   coverTitle: { position: "absolute", left: 16, right: 16, bottom: 14 },
   title: { color: "#fff", fontSize: 26, fontWeight: "900" },
   members: { color: theme.colors.textDim, marginTop: 4 },
+  memberRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 6 },
+  avatarStack: { flexDirection: "row", alignItems: "center" },
+  stackRing: { borderRadius: 999, borderWidth: 2, borderColor: theme.colors.bg },
   bannerLabel: { color: theme.colors.textFaint, fontSize: 12, textTransform: "uppercase", letterSpacing: 1 },
   bannerVal: { fontWeight: "800", fontSize: 18, marginTop: 2 },
   tabs: { flexDirection: "row", backgroundColor: "rgba(0,0,0,0.25)", borderRadius: 16, padding: 4, marginTop: 14 },
@@ -1107,6 +1244,7 @@ const styles = StyleSheet.create({
   // Invite modal
   inviteRow: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "rgba(255,255,255,0.05)", borderRadius: 16, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: theme.colors.border },
   shareBox: { marginTop: 16, backgroundColor: "rgba(255,255,255,0.05)", borderRadius: 16, padding: 12, borderWidth: 1, borderColor: theme.colors.border },
+  linkRow: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "rgba(0,0,0,0.25)", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: theme.colors.border, marginBottom: 10 },
   shareTitle: { color: theme.colors.textFaint, fontSize: 12, fontWeight: "700", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 },
   shareBtn: { flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 12, borderRadius: 14 },
   shareGhost: { backgroundColor: "rgba(255,255,255,0.08)", borderWidth: 1, borderColor: theme.colors.border },

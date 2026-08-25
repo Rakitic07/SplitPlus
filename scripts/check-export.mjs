@@ -1,6 +1,7 @@
 // Non-destructive check for the overall-export endpoint. Registers a unique
 // user, creates two groups with expenses, then verifies GET /api/export/expenses
 // returns every expense flattened with its group, currency and the caller's share.
+import "./_guard-local.mjs"; // refuse to run unless targeting local SQLite
 import { spawn } from "node:child_process";
 
 const PORT = process.env.CHECK_PORT || "8804";

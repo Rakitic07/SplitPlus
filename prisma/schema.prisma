@@ -40,6 +40,20 @@ model User {
   settlementsFrom Settlement[] @relation("SettlementFrom")
   settlementsTo   Settlement[] @relation("SettlementTo")
   resetRequests   ResetRequest[]
+  nameChanges     NameChange[]
+}
+
+// Audit trail of display-name changes. Used to enforce a "twice per rolling
+// 30 days" limit (count rows newer than the window) and to keep history.
+model NameChange {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  oldName   String
+  newName   String
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
 }
 
 // A group of people who share expenses (a trip, a flat, a dinner club…).
@@ -51,6 +65,10 @@ model Group {
   // ISO 4217 currency code for the whole group (defaults to INR).
   currency    String   @default("INR")
   emoji       String?
+  // Opaque, unguessable capability token for the shareable "join link". Anyone
+  // with the link can join the group after signing in (like a WhatsApp group
+  // invite). Generated lazily on first share; can be rotated to revoke old links.
+  joinToken   String?  @unique
   createdById String
   createdBy   User     @relation("GroupCreator", fields: [createdById], references: [id])
   createdAt   DateTime @default(now())

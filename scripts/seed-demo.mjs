@@ -3,6 +3,7 @@
 // group creation if the demo user already has groups.
 //
 // Requires the dev API to be running (npm run dev → API on :8787).
+import "./_guard-local.mjs"; // refuse to run unless targeting local SQLite
 const BASE = process.env.SEED_BASE || "http://localhost:8787/api";
 const PASS = "splitplus";
 

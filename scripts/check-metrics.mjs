@@ -1,6 +1,7 @@
 // Focused, non-destructive check: boots the API on a throwaway port and verifies
 // GET /api/admin/metrics returns 200 with real totals (i.e. the $transaction
 // batch doesn't blow the connection pool). Kills only the server it spawned.
+import "./_guard-local.mjs"; // refuse to run unless targeting local SQLite
 import { spawn } from "node:child_process";
 
 const PORT = process.env.CHECK_PORT || "8801";

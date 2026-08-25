@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Bell, ImagePlus, Trash2 } from "lucide-react";
+import { Bell, Check, ImagePlus, Pencil, Trash2 } from "lucide-react";
 import { Modal } from "@/components/Modal";
-import { Avatar, Button, Field } from "@/components/ui";
+import { Avatar, Button, Field, Input } from "@/components/ui";
 import { CURRENCIES } from "@shared/currency";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, type NameChangeStatus } from "@/lib/api";
 import { fileToThumbnail } from "@/lib/utils";
 import { useAuth } from "@/state/auth";
 import { useToast } from "@/state/toast";
@@ -28,6 +28,12 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
   );
   const [busy, setBusy] = useState(false);
 
+  // Display-name editing (rate-limited to 2 / 30 days server-side).
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(user?.name ?? "");
+  const [nameBusy, setNameBusy] = useState(false);
+  const [nameStatus, setNameStatus] = useState<NameChangeStatus | null>(null);
+
   // Reset the form to the latest user values whenever the modal opens.
   useEffect(() => {
     if (!open || !user) return;
@@ -35,7 +41,32 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
     setDefaultCurrency(user.defaultCurrency);
     setReminderEnabled(user.reminderEnabled);
     setReminderFrequency(user.reminderFrequency);
+    setEditingName(false);
+    setNameDraft(user.name);
+    api.nameStatus().then(setNameStatus).catch(() => setNameStatus(null));
   }, [open, user]);
+
+  async function saveName() {
+    if (!user) return;
+    const next = nameDraft.trim();
+    if (!next || next === user.name) {
+      setEditingName(false);
+      setNameDraft(user.name);
+      return;
+    }
+    setNameBusy(true);
+    try {
+      const { user: updated, status } = await api.changeName(next);
+      setUser(updated);
+      setNameStatus(status);
+      setEditingName(false);
+      success("Name updated");
+    } catch (err) {
+      error(err instanceof ApiError ? err.message : "Couldn't change name");
+    } finally {
+      setNameBusy(false);
+    }
+  }
 
   async function pickImage(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -118,6 +149,63 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
           </div>
           <input ref={fileRef} type="file" accept="image/*" hidden onChange={pickImage} />
         </div>
+
+        {/* Display name (rate-limited) */}
+        <Field
+          label="Display name"
+          hint={
+            nameStatus
+              ? nameStatus.remaining > 0
+                ? `${nameStatus.remaining} of ${nameStatus.limit} name changes left in the next ${nameStatus.windowDays} days. Others invite you by this name.`
+                : `Limit reached. You can change it again on ${
+                    nameStatus.nextChangeAt
+                      ? new Date(nameStatus.nextChangeAt).toLocaleDateString(undefined, {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })
+                      : "later"
+                  }.`
+              : "You can change your name up to twice a month."
+          }
+        >
+          {editingName ? (
+            <div className="flex items-center gap-2">
+              <Input
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                maxLength={40}
+                autoFocus
+                placeholder="Your name"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") saveName();
+                  if (e.key === "Escape") {
+                    setEditingName(false);
+                    setNameDraft(user.name);
+                  }
+                }}
+              />
+              <Button className="!px-3" loading={nameBusy} onClick={saveName} title="Save name">
+                <Check className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+              <span className="truncate font-semibold text-white">{user.name}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setNameDraft(user.name);
+                  setEditingName(true);
+                }}
+                disabled={nameStatus?.remaining === 0}
+                className="flex shrink-0 items-center gap-1 text-xs font-semibold text-orange-300 transition hover:text-orange-200 disabled:cursor-not-allowed disabled:text-white/30"
+              >
+                <Pencil className="h-3 w-3" /> Edit
+              </button>
+            </div>
+          )}
+        </Field>
 
         {/* Default currency */}
         <Field

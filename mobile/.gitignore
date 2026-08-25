@@ -4,3 +4,7 @@ dist/
 web-build/
 *.log
 .DS_Store
+
+# Build artifacts — the APK is distributed via GitHub Releases, not the repo.
+outputs/
+*.apk

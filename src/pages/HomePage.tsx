@@ -36,6 +36,22 @@ type IncomingSettlement = Settlement & {
   group: { id: string; name: string; emoji?: string | null; currency: string };
 };
 
+// Staggered reveal for the groups grid — cards cascade in with a soft spring
+// and a subtle scale-up, so the dashboard feels alive as it populates.
+const gridContainer = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.06, delayChildren: 0.04 } },
+};
+const gridItem = {
+  hidden: { opacity: 0, y: 18, scale: 0.97 },
+  show: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: { type: "spring", stiffness: 260, damping: 24 },
+  },
+} as const;
+
 export function HomePage() {
   const { user } = useAuth();
   const { success, error } = useToast();
@@ -149,7 +165,11 @@ export function HomePage() {
 
       <main className="mx-auto max-w-4xl px-4 py-6">
         {/* Hero */}
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: "spring", stiffness: 200, damping: 20 }}
+        >
           <h1 className="text-2xl font-bold text-white">
             Hey {user?.name?.split(" ")[0] ?? "there"} 👋
           </h1>
@@ -360,14 +380,14 @@ export function HomePage() {
               />
             </Card>
           ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {groups.map((g, idx) => (
-                <motion.div
-                  key={g.id}
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: idx * 0.04 }}
-                >
+            <motion.div
+              variants={gridContainer}
+              initial="hidden"
+              animate="show"
+              className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
+            >
+              {groups.map((g) => (
+                <motion.div key={g.id} variants={gridItem}>
                   <Link to={`/g/${g.id}`}>
                     <Card className="group overflow-hidden transition hover:-translate-y-1">
                       <div className="relative h-28 w-full overflow-hidden">
@@ -414,7 +434,7 @@ export function HomePage() {
                   </Link>
                 </motion.div>
               ))}
-            </div>
+            </motion.div>
           )}
         </div>
       </main>

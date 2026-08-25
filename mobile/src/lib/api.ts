@@ -40,15 +40,45 @@ export class ApiError extends Error {
   }
 }
 
+// Requests that hang forever leave the UI stuck on a shimmer, so every call is
+// bounded. On a cold backend a legitimate response can still take a few seconds,
+// hence a generous ceiling rather than an aggressive one.
+const REQUEST_TIMEOUT_MS = 20000;
+
 async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = { ...(init.headers as Record<string, string>) };
   if (init.body) headers["Content-Type"] = "application/json";
   if (memToken) headers.Authorization = `Bearer ${memToken}`;
 
-  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, { ...init, headers, signal: controller.signal });
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new ApiError("The server took too long to respond. Please try again.", 0);
+    }
+    throw new ApiError("Can't reach the server. Check your connection.", 0);
+  } finally {
+    clearTimeout(timer);
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new ApiError((data as { error?: string }).error ?? "Something went wrong", res.status);
   return data as T;
+}
+
+// Fire-and-forget warm-up ping. Called on app launch so the serverless function
+// and database are waking up while the user navigates, cutting the first real
+// request's cold-start wait. Never throws.
+export async function warmBackend(): Promise<void> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    await fetch(`${API_BASE}/health`, { signal: controller.signal }).finally(() => clearTimeout(timer));
+  } catch {
+    /* best-effort */
+  }
 }
 
 const body = (v: unknown) => JSON.stringify(v);
@@ -84,6 +114,15 @@ export type SettingsInput = {
   defaultCurrency?: string;
   reminderEnabled?: boolean;
   reminderFrequency?: ReminderFrequency;
+};
+
+// How many display-name changes remain in the rolling window.
+export type NameChangeStatus = {
+  limit: number;
+  windowDays: number;
+  used: number;
+  remaining: number;
+  nextChangeAt: string | null;
 };
 
 // Knowledge-based verification answers (lost passphrase AND recovery code).
@@ -187,6 +226,19 @@ export const api = {
   async updateSettings(patch: SettingsInput) {
     return req<{ user: SelfUser }>("/auth/settings", { method: "PATCH", body: body(patch) });
   },
+  // Remaining display-name changes in the current 30-day window.
+  async nameStatus() {
+    return req<NameChangeStatus>("/auth/name-status");
+  },
+  // Change the display name (max 2 / 30 days; must be unique).
+  async changeName(name: string) {
+    const d = await req<{ user: SelfUser; status: NameChangeStatus; token?: string }>("/auth/name", {
+      method: "PATCH",
+      body: body({ name }),
+    });
+    if (d.token) setAuthToken(d.token);
+    return d;
+  },
   // Casual, cross-group expense search (results carry their group).
   async searchExpenses(q: string) {
     return req<{ results: SearchExpense[] }>(`/search?q=${encodeURIComponent(q)}`);
@@ -276,12 +328,40 @@ export const api = {
     );
   },
 
+  // ── Join links ──────────────────────────────────────────────────────────
+  // Public preview of a group behind a shareable join link.
+  async joinPreview(token: string) {
+    return req<{ group: { id: string; name: string; emoji: string | null; memberCount: number } }>(
+      `/join/${encodeURIComponent(token)}`
+    );
+  },
+  // Join the group the link points to (idempotent). Requires being signed in.
+  async joinGroup(token: string) {
+    return req<{ ok: boolean; groupId: string; alreadyMember: boolean }>(
+      `/join/${encodeURIComponent(token)}`,
+      { method: "POST" }
+    );
+  },
+  // The group's current shareable link token (created on first request).
+  async getJoinLink(groupId: string) {
+    return req<{ token: string }>(`/groups/${groupId}/join-link`);
+  },
+
   async listExpenses(groupId: string) {
     return req<{ expenses: Expense[] }>(`/groups/${groupId}/expenses`);
+  },
+  async getExpense(groupId: string, expenseId: string) {
+    return req<{ expense: Expense }>(`/groups/${groupId}/expenses/${expenseId}`);
   },
   async createExpense(groupId: string, input: ExpenseInputDto) {
     return req<{ expense: Expense }>(`/groups/${groupId}/expenses`, {
       method: "POST",
+      body: body(input),
+    });
+  },
+  async updateExpense(groupId: string, expenseId: string, input: ExpenseInputDto) {
+    return req<{ expense: Expense }>(`/groups/${groupId}/expenses/${expenseId}`, {
+      method: "PATCH",
       body: body(input),
     });
   },

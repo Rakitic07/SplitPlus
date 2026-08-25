@@ -10,6 +10,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button, Card, Input, Label } from "../components/ui";
+import { AppFooter } from "../components/AppFooter";
+import { ShimmerWordmark } from "../components/Shimmer";
 import { RecoverSheet } from "../components/RecoverSheet";
 import { useAuth } from "../state/auth";
 import { useToast } from "../state/toast";
@@ -85,7 +87,7 @@ export function AuthScreen() {
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={[styles.center, { paddingTop: insets.top + 40, paddingBottom: 40 }]}>
-        <Text style={styles.brand}>Split+</Text>
+        <ShimmerWordmark text="Split+" textStyle={styles.brand} />
         <Text style={styles.tagline}>Create groups. Split any bill. Settle up with confidence.</Text>
 
         <Card strong style={{ padding: 20, width: "100%", maxWidth: 420, marginTop: 24 }}>
@@ -123,6 +125,8 @@ export function AuthScreen() {
         <Text style={styles.footer}>
           No email needed. Your name + passphrase is your account — invite friends by their name.
         </Text>
+
+        <AppFooter />
       </ScrollView>
 
       <RecoverSheet visible={showRecover} onClose={() => setShowRecover(false)} />

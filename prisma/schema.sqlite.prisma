@@ -34,6 +34,20 @@ model User {
   settlementsFrom Settlement[]   @relation("SettlementFrom")
   settlementsTo   Settlement[]   @relation("SettlementTo")
   resetRequests   ResetRequest[]
+  nameChanges     NameChange[]
+}
+
+// Audit trail of display-name changes (enforces a "twice per rolling 30 days"
+// limit and keeps history). Mirror of the model in schema.prisma.
+model NameChange {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  oldName   String
+  newName   String
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
 }
 
 model Group {
@@ -42,6 +56,10 @@ model Group {
   thumbnail   String?
   currency    String   @default("INR")
   emoji       String?
+  // Opaque, unguessable capability token for the shareable "join link". Anyone
+  // with the link can join the group after signing in (like a WhatsApp group
+  // invite). Generated lazily on first share; can be rotated to revoke old links.
+  joinToken   String?  @unique
   createdById String
   createdBy   User     @relation("GroupCreator", fields: [createdById], references: [id])
   createdAt   DateTime @default(now())

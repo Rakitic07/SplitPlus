@@ -71,6 +71,21 @@ export const adminActionSchema = z.object({
   action: z.enum(["approve", "reject"]),
 });
 
+// Admin editing a user's display name (bypasses the self-service rate limit,
+// but still enforces case-insensitive uniqueness on the server).
+export const adminUserPatchSchema = z.object({
+  name: nameField,
+});
+
+// Admin editing a group's basics (name / currency / emoji).
+export const adminGroupPatchSchema = z
+  .object({
+    name: z.string().trim().min(1, "Group name is required").max(60).optional(),
+    currency: z.string().trim().length(3).optional(),
+    emoji: z.string().trim().max(8).optional().or(z.literal("")),
+  })
+  .refine((d) => Object.keys(d).length > 0, { message: "Nothing to update" });
+
 // Tiny base64 image data URL, capped so a full-resolution photo can't be
 // smuggled into the DB. base64 grows ~4/3, so ~200k chars ≈ 150KB of bytes.
 const imageField = z
@@ -90,6 +105,12 @@ export const settingsSchema = z
     reminderFrequency: reminderFrequencyEnum.optional(),
   })
   .refine((d) => Object.keys(d).length > 0, { message: "Nothing to update" });
+
+// Changing the display name — same rules as sign-up (2–40 chars). The server
+// additionally enforces uniqueness and a "twice per 30 days" limit.
+export const changeNameSchema = z.object({
+  name: nameField,
+});
 
 // ── Groups ──────────────────────────────────────────────────────────────
 export const groupSchema = z.object({

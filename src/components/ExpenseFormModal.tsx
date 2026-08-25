@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { Equal, ImagePlus, Percent, ScrollText, SlidersHorizontal, Trash2 } from "lucide-react";
 import { Modal } from "@/components/Modal";
+import { ImageLightbox } from "@/components/ImageLightbox";
 import { Avatar, Button, Field, Input } from "@/components/ui";
 import { DatePicker } from "@/components/DatePicker";
 import { CATEGORIES, categoryMeta } from "@shared/categories";
@@ -64,6 +65,7 @@ export function ExpenseFormModal({
   const [mode, setMode] = useState<SplitMode>((editing?.splitMode as SplitMode) ?? "equal");
   const [shares, setShares] = useState<ShareState>(initShares);
   const [thumbnail, setThumbnail] = useState<string | null>(editing?.thumbnail ?? null);
+  const [preview, setPreview] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const amt = Number(amount) || 0;
@@ -315,7 +317,14 @@ export function ExpenseFormModal({
           <span className="mb-1.5 block text-sm font-semibold text-white/70">Receipt / screenshot</span>
           {thumbnail ? (
             <div className="relative inline-block">
-              <img src={thumbnail} alt="receipt" className="h-28 rounded-2xl object-cover" />
+              <button
+                type="button"
+                onClick={() => setPreview(true)}
+                title="Tap to preview"
+                className="block cursor-zoom-in overflow-hidden rounded-2xl"
+              >
+                <img src={thumbnail} alt="receipt" className="h-28 rounded-2xl object-cover" />
+              </button>
               <button
                 type="button"
                 onClick={() => setThumbnail(null)}
@@ -336,6 +345,7 @@ export function ExpenseFormModal({
           <input ref={fileRef} type="file" accept="image/*" hidden onChange={pickImage} />
         </div>
       </div>
+      {preview && <ImageLightbox src={thumbnail} alt="Receipt" onClose={() => setPreview(false)} />}
     </Modal>
   );
 }

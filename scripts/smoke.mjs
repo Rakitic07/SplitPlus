@@ -1,5 +1,6 @@
 // End-to-end smoke test for the new settings / invites / roles / stats features.
 // Spawns the Express API (sqlite dev.db), exercises the flows, then shuts down.
+import "./_guard-local.mjs"; // refuse to run unless targeting local SQLite
 import { spawn } from "node:child_process";
 
 const PORT = process.env.SMOKE_PORT || "8799";

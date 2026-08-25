@@ -2,7 +2,11 @@ import { Router, type RequestHandler } from "express";
 import os from "node:os";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { prisma } from "../lib/prisma.js";
-import { adminActionSchema } from "../../shared/validation.js";
+import {
+  adminActionSchema,
+  adminGroupPatchSchema,
+  adminUserPatchSchema,
+} from "../../shared/validation.js";
 import { ah, zodMessage } from "../lib/http.js";
 
 export const adminRouter = Router();
@@ -563,5 +567,188 @@ adminRouter.post(
     });
 
     return res.json({ ok: true, status });
+  })
+);
+
+// ── User & group management ───────────────────────────────────────────────
+
+// Case-insensitive "contains" filter that works on both Postgres (needs the
+// explicit `mode`) and SQLite (LIKE is already case-insensitive for ASCII).
+function containsCI(q: string) {
+  return activeProvider() === "postgresql"
+    ? { contains: q, mode: "insensitive" as const }
+    : { contains: q };
+}
+
+// GET /api/admin/users?q= — browse accounts (with activity counts) to manage.
+adminRouter.get(
+  "/users",
+  ah(async (req, res) => {
+    const q = String(req.query.q ?? "").trim();
+    const users = await prisma.user.findMany({
+      where: q ? { name: containsCI(q) } : undefined,
+      orderBy: { createdAt: "desc" },
+      take: 100,
+      select: {
+        id: true,
+        name: true,
+        avatar: true,
+        defaultCurrency: true,
+        createdAt: true,
+        _count: { select: { memberships: true, createdGroups: true, paidExpenses: true } },
+      },
+    });
+    return res.json({
+      users: users.map((u) => ({
+        id: u.id,
+        name: u.name,
+        hasAvatar: !!u.avatar,
+        defaultCurrency: u.defaultCurrency,
+        createdAt: u.createdAt.toISOString(),
+        memberships: u._count.memberships,
+        ownedGroups: u._count.createdGroups,
+        paidExpenses: u._count.paidExpenses,
+      })),
+    });
+  })
+);
+
+// PATCH /api/admin/users/:id — rename a user (admin override of the rate limit;
+// uniqueness is still enforced).
+adminRouter.patch(
+  "/users/:id",
+  ah(async (req, res) => {
+    const parsed = adminUserPatchSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: zodMessage(parsed.error) });
+
+    const name = parsed.data.name;
+    const nameKey = name.toLowerCase();
+    const target = await prisma.user.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, name: true, nameKey: true },
+    });
+    if (!target) return res.status(404).json({ error: "User not found." });
+
+    if (nameKey === target.nameKey) {
+      if (name === target.name) return res.status(400).json({ error: "That's already their name." });
+    } else {
+      const clash = await prisma.user.findUnique({ where: { nameKey }, select: { id: true } });
+      if (clash) return res.status(409).json({ error: "That name is already taken." });
+    }
+
+    try {
+      const updated = await prisma.user.update({
+        where: { id: target.id },
+        data: { name, nameKey },
+        select: { id: true, name: true },
+      });
+      return res.json({ user: updated });
+    } catch (err) {
+      if (typeof err === "object" && err && (err as { code?: string }).code === "P2002") {
+        return res.status(409).json({ error: "That name was just taken. Try another." });
+      }
+      throw err;
+    }
+  })
+);
+
+// DELETE /api/admin/users/:id — permanently remove an account and everything it
+// anchors. Cascade order matters because several relations have no DB-level
+// onDelete: groups the user OWNS are removed (taking their members/expenses/
+// settlements with them), then any expenses/settlements the user is tied to in
+// OTHER groups, then the user (memberships, shares, invites, reset requests and
+// name-change history cascade automatically).
+adminRouter.delete(
+  "/users/:id",
+  ah(async (req, res) => {
+    const id = req.params.id;
+    const target = await prisma.user.findUnique({ where: { id }, select: { id: true } });
+    if (!target) return res.status(404).json({ error: "User not found." });
+
+    await prisma.$transaction(async (tx) => {
+      await tx.group.deleteMany({ where: { createdById: id } });
+      await tx.expense.deleteMany({ where: { OR: [{ paidById: id }, { createdById: id }] } });
+      await tx.settlement.deleteMany({ where: { OR: [{ fromId: id }, { toId: id }] } });
+      await tx.user.delete({ where: { id } });
+    });
+
+    return res.json({ ok: true });
+  })
+);
+
+// GET /api/admin/groups?q= — browse groups (with owner + counts) to manage.
+adminRouter.get(
+  "/groups",
+  ah(async (req, res) => {
+    const q = String(req.query.q ?? "").trim();
+    const groups = await prisma.group.findMany({
+      where: q ? { name: containsCI(q) } : undefined,
+      orderBy: { createdAt: "desc" },
+      take: 100,
+      select: {
+        id: true,
+        name: true,
+        emoji: true,
+        currency: true,
+        createdAt: true,
+        createdBy: { select: { id: true, name: true } },
+        _count: { select: { members: true, expenses: true } },
+      },
+    });
+    return res.json({
+      groups: groups.map((g) => ({
+        id: g.id,
+        name: g.name,
+        emoji: g.emoji,
+        currency: g.currency,
+        createdAt: g.createdAt.toISOString(),
+        owner: g.createdBy ? { id: g.createdBy.id, name: g.createdBy.name } : null,
+        members: g._count.members,
+        expenses: g._count.expenses,
+      })),
+    });
+  })
+);
+
+// PATCH /api/admin/groups/:id — edit a group's name / currency / emoji.
+adminRouter.patch(
+  "/groups/:id",
+  ah(async (req, res) => {
+    const parsed = adminGroupPatchSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: zodMessage(parsed.error) });
+
+    const exists = await prisma.group.findUnique({
+      where: { id: req.params.id },
+      select: { id: true },
+    });
+    if (!exists) return res.status(404).json({ error: "Group not found." });
+
+    const { name, currency, emoji } = parsed.data;
+    const updated = await prisma.group.update({
+      where: { id: req.params.id },
+      data: {
+        ...(name !== undefined ? { name } : {}),
+        ...(currency ? { currency: currency.toUpperCase() } : {}),
+        ...(emoji !== undefined ? { emoji: emoji || null } : {}),
+      },
+      select: { id: true, name: true, emoji: true, currency: true },
+    });
+    return res.json({ group: updated });
+  })
+);
+
+// DELETE /api/admin/groups/:id — remove a group and all of its members,
+// expenses, shares, invites and settlements (all cascade from the group).
+adminRouter.delete(
+  "/groups/:id",
+  ah(async (req, res) => {
+    const exists = await prisma.group.findUnique({
+      where: { id: req.params.id },
+      select: { id: true },
+    });
+    if (!exists) return res.status(404).json({ error: "Group not found." });
+
+    await prisma.group.delete({ where: { id: req.params.id } });
+    return res.json({ ok: true });
   })
 );

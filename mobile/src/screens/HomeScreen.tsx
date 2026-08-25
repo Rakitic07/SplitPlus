@@ -15,10 +15,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { Avatar, Button, Card, Empty, Input, Label, SectionTitle } from "../components/ui";
+import { AppFooter } from "../components/AppFooter";
 import { ExportSheet } from "../components/ExportSheet";
 import { SettingsSheet } from "../components/SettingsSheet";
-import { ShimmerText, SkeletonRows } from "../components/Shimmer";
+import { ShimmerText, ShimmerWordmark, SkeletonRows } from "../components/Shimmer";
 import { api, ApiError, type SearchExpense } from "../lib/api";
+import { storage } from "../lib/storage";
 import { formatMoney, CURRENCIES } from "../shared/currency";
 import { GROUP_EMOJIS } from "../shared/categories";
 import { useAuth } from "../state/auth";
@@ -29,6 +31,8 @@ import type { GroupSummary, PendingInvite, Settlement } from "../shared/types";
 
 type Nav = NativeStackNavigationProp<RootStackParamList, "Home">;
 type Incoming = Settlement & { group: { id: string; name: string; emoji?: string | null; currency: string } };
+
+const HOME_CACHE_KEY = "splitplus_cache_home";
 
 export function HomeScreen() {
   const nav = useNavigation<Nav>();
@@ -44,6 +48,7 @@ export function HomeScreen() {
   const [showCreate, setShowCreate] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showJoin, setShowJoin] = useState(false);
 
   // Global, cross-group expense search.
   const [searchQ, setSearchQ] = useState("");
@@ -57,12 +62,29 @@ export function HomeScreen() {
       setGroups(d.groups);
       setInvites(d.invites);
       setIncoming(d.settlements as Incoming[]);
+      storage.setJSON(HOME_CACHE_KEY, d);
     } catch {
-      /* silent */
+      /* silent — cached data (if any) stays on screen */
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
+  }, []);
+
+  // Stale-while-revalidate: paint the last-known home instantly (no long shimmer
+  // on a cold backend), then refresh in the background.
+  useEffect(() => {
+    let alive = true;
+    storage.getJSON<{ groups: GroupSummary[]; invites: PendingInvite[]; settlements: Incoming[] }>(HOME_CACHE_KEY).then((c) => {
+      if (!alive || !c) return;
+      setGroups(c.groups ?? []);
+      setInvites(c.invites ?? []);
+      setIncoming((c.settlements as Incoming[]) ?? []);
+      setLoading(false);
+    });
+    return () => {
+      alive = false;
+    };
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -119,7 +141,7 @@ export function HomeScreen() {
   return (
     <View style={{ flex: 1 }}>
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <Text style={styles.brand}>Split+</Text>
+        <ShimmerWordmark text="Split+" textStyle={styles.brand} />
         <Pressable
           onPress={() => setShowSettings(true)}
           style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
@@ -204,6 +226,12 @@ export function HomeScreen() {
             </Card>
           )}
         </View>
+
+        {/* Join a group from a shared invite link/code (native app can't always
+            open the https link directly, so let people paste it in). */}
+        <Pressable onPress={() => setShowJoin(true)} style={styles.joinLinkRow}>
+          <Text style={styles.joinLinkTxt}>🔗  Have an invite link? Join a group</Text>
+        </Pressable>
 
         {(invites.length > 0 || incoming.length > 0) && (
           <View style={{ gap: 8, marginTop: 16 }}>
@@ -308,6 +336,8 @@ export function HomeScreen() {
             ))}
           </View>
         )}
+
+        <AppFooter />
       </ScrollView>
 
       <Pressable style={[styles.fab, { bottom: insets.bottom + 20 }]} onPress={() => setShowCreate(true)}>
@@ -326,7 +356,106 @@ export function HomeScreen() {
       />
       <ExportSheet visible={showExport} onClose={() => setShowExport(false)} scope="overall" />
       <SettingsSheet visible={showSettings} onClose={() => setShowSettings(false)} />
+      <JoinByLinkModal
+        visible={showJoin}
+        onClose={() => setShowJoin(false)}
+        onJoined={(id, name) => {
+          load();
+          nav.navigate("Group", { groupId: id, name });
+        }}
+      />
     </View>
+  );
+}
+
+// Paste a Split+ invite link (or just the code at the end of it) to join the
+// group. Accepts either a full ".../join/<token>" URL or a bare token.
+function JoinByLinkModal({
+  visible,
+  onClose,
+  onJoined,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onJoined: (groupId: string, name?: string) => void;
+}) {
+  const insets = useSafeAreaInsets();
+  const { success, error } = useToast();
+  const [value, setValue] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState<string | null>(null);
+
+  function extractToken(input: string): string {
+    const t = input.trim();
+    const m = t.match(/\/join\/([^/?#\s]+)/i);
+    return m ? decodeURIComponent(m[1]) : t;
+  }
+
+  // Preview the group as soon as a plausible token is entered.
+  useEffect(() => {
+    const token = extractToken(value);
+    if (!token || token.length < 6) {
+      setPreview(null);
+      return;
+    }
+    let alive = true;
+    const timer = setTimeout(() => {
+      api
+        .joinPreview(token)
+        .then((r) => alive && setPreview(r.group.name))
+        .catch(() => alive && setPreview(null));
+    }, 300);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [value]);
+
+  async function join() {
+    const token = extractToken(value);
+    if (!token) return error("Paste an invite link or code");
+    setBusy(true);
+    try {
+      const r = await api.joinGroup(token);
+      success(r.alreadyMember ? "You're already in this group" : "You're in! 🎉");
+      setValue("");
+      setPreview(null);
+      onClose();
+      onJoined(r.groupId, preview ?? undefined);
+    } catch (err) {
+      error(err instanceof ApiError ? err.message : "Couldn't join with that link");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={styles.modalWrap}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={[styles.sheet, { paddingBottom: insets.bottom + 20 }]}>
+          <Text style={styles.sheetTitle}>Join with a link</Text>
+          <Label>Invite link or code</Label>
+          <Input
+            value={value}
+            onChangeText={setValue}
+            placeholder="https://split-plus.vercel.app/join/…"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          {preview ? (
+            <Text style={{ color: theme.colors.green, marginTop: 8, fontWeight: "700" }}>
+              ✓ Joining “{preview}”
+            </Text>
+          ) : (
+            <Text style={{ color: theme.colors.textFaint, marginTop: 8, fontSize: 12 }}>
+              Paste the whole link a friend shared, or just the code at the end.
+            </Text>
+          )}
+          <Button title="Join group" onPress={join} loading={busy} style={{ marginTop: 20 }} />
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -455,6 +584,8 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, paddingLeft: 40 },
   searchClear: { position: "absolute", right: 12 },
   searchInfo: { color: theme.colors.textFaint, textAlign: "center", paddingVertical: 14 },
+  joinLinkRow: { marginTop: 12, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.border, borderStyle: "dashed", backgroundColor: "rgba(255,255,255,0.04)", paddingVertical: 12, alignItems: "center" },
+  joinLinkTxt: { color: theme.colors.textDim, fontWeight: "700", fontSize: 13 },
   resultRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 8, paddingVertical: 10 },
   resultTitle: { color: "#fff", fontWeight: "700", fontSize: 15 },
   resultSub: { color: theme.colors.textFaint, fontSize: 12, marginTop: 2 },

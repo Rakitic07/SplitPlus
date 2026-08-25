@@ -13,6 +13,8 @@
     "preview": "vite preview",
     "db:push": "prisma db push",
     "db:push:local": "prisma db push --schema prisma/schema.sqlite.prisma",
+    "db:reset:local": "node scripts/reset-db.mjs --all --yes",
+    "db:clean:local": "node scripts/reset-db.mjs --test --yes",
     "postinstall": "prisma generate --schema prisma/schema.sqlite.prisma"
   },
   "dependencies": {

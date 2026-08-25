@@ -15,7 +15,7 @@ export function AppHeader({ children }: { children?: React.ReactNode }) {
 
   return (
     <>
-      <header className="sticky top-0 z-30 border-b border-white/10 bg-[#0a0807]/70 backdrop-blur-xl">
+      <header className="pt-safe sticky top-0 z-30 border-b border-white/10 bg-[#0a0807]/70 backdrop-blur-xl">
         <div className="mx-auto flex max-w-4xl items-center justify-between gap-3 px-4 py-3">
           <button onClick={() => navigate("/")} className="flex items-center">
             <Logo size={30} textClassName="text-2xl" />

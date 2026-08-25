@@ -32,4 +32,21 @@ export const storage = {
       /* ignore */
     }
   },
+  // Typed JSON cache helpers — used for stale-while-revalidate so screens can
+  // paint last-known data instantly instead of a long shimmer on cold starts.
+  async getJSON<T>(key: string): Promise<T | null> {
+    try {
+      const raw = await AsyncStorage.getItem(key);
+      return raw ? (JSON.parse(raw) as T) : null;
+    } catch {
+      return null;
+    }
+  },
+  async setJSON(key: string, value: unknown): Promise<void> {
+    try {
+      await AsyncStorage.setItem(key, JSON.stringify(value));
+    } catch {
+      /* ignore — cache is best-effort */
+    }
+  },
 };

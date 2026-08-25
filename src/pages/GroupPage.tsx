@@ -112,6 +112,10 @@ export function GroupPage() {
   const [showExport, setShowExport] = useState(false);
   const [showExpense, setShowExpense] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
+  // Bumped every time the expense modal opens so it remounts and re-reads the
+  // `editing` expense — otherwise its once-only field initialisers keep stale
+  // (empty) values and edits don't prefill.
+  const [expenseFormKey, setExpenseFormKey] = useState(0);
   const [showSettle, setShowSettle] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
@@ -149,6 +153,7 @@ export function GroupPage() {
       try {
         const { expense } = await api.getExpense(groupId, expenseId);
         setEditing(expense);
+        setExpenseFormKey((k) => k + 1);
         setShowExpense(true);
       } catch {
         error("Couldn't open expense");
@@ -276,7 +281,7 @@ export function GroupPage() {
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-[#0a0807] via-[#0a0807]/40 to-transparent" />
 
-        <div className="absolute left-0 right-0 top-0 flex items-center justify-between p-4">
+        <div className="pt-safe-bar absolute left-0 right-0 top-0 flex items-center justify-between px-4 pb-4">
           <button
             onClick={() => navigate("/")}
             className="glass rounded-full p-2 text-white/90 transition hover:text-white"
@@ -428,10 +433,12 @@ export function GroupPage() {
                   />
                 ) : tab === "activity" ? (
                   <ActivityTab
+                    expenses={expenses}
                     settlements={settlements}
                     currency={currency}
                     myId={group.myUserId}
                     onRespond={respondSettlement}
+                    onOpenExpense={openExpense}
                   />
                 ) : (
                   <InfoTab
@@ -474,6 +481,7 @@ export function GroupPage() {
         <button
           onClick={() => {
             setEditing(null);
+            setExpenseFormKey((k) => k + 1);
             setShowExpense(true);
           }}
           className="glass-btn-primary fixed bottom-6 right-6 z-30 flex h-14 items-center gap-2 !rounded-full !px-5 shadow-glow"
@@ -485,6 +493,7 @@ export function GroupPage() {
       {group && (
         <>
           <ExpenseFormModal
+            key={expenseFormKey}
             open={showExpense}
             onClose={() => {
               setShowExpense(false);
@@ -1177,16 +1186,24 @@ function InfoTab({
   );
 }
 
+type ActivityItem =
+  | { kind: "expense"; id: string; at: string; exp: Expense }
+  | { kind: "settlement"; id: string; at: string; st: Settlement };
+
 function ActivityTab({
+  expenses,
   settlements,
   currency,
   myId,
   onRespond,
+  onOpenExpense,
 }: {
+  expenses: Expense[];
   settlements: Settlement[];
   currency: string;
   myId: string;
   onRespond: (s: Settlement, action: "approve" | "decline") => void;
+  onOpenExpense: (id: string) => void;
 }) {
   const [query, setQuery] = useState("");
   // 0 = current month, -1 = last month, … (only used when not searching).
@@ -1209,23 +1226,51 @@ function ActivityTab({
     year: "numeric",
   });
 
+  // Unified, newest-first feed: expenses added + settlements/payments.
+  const items = useMemo<ActivityItem[]>(() => {
+    const ex: ActivityItem[] = expenses.map((e) => ({
+      kind: "expense",
+      id: `e-${e.id}`,
+      at: e.createdAt,
+      exp: e,
+    }));
+    const se: ActivityItem[] = settlements.map((s) => ({
+      kind: "settlement",
+      id: `s-${s.id}`,
+      at: s.createdAt,
+      st: s,
+    }));
+    return [...ex, ...se].sort((a, b) => +new Date(b.at) - +new Date(a.at));
+  }, [expenses, settlements]);
+
   const filtered = useMemo(() => {
     if (searching) {
-      return settlements.filter(
-        (s) =>
+      return items.filter((it) => {
+        if (it.kind === "expense") {
+          const e = it.exp;
+          return (
+            e.title.toLowerCase().includes(q) ||
+            e.category.toLowerCase().includes(q) ||
+            (e.notes ?? "").toLowerCase().includes(q) ||
+            e.paidBy.name.toLowerCase().includes(q)
+          );
+        }
+        const s = it.st;
+        return (
           s.from.name.toLowerCase().includes(q) ||
           s.to.name.toLowerCase().includes(q) ||
           (s.note ?? "").toLowerCase().includes(q) ||
           s.status.toLowerCase().includes(q)
-      );
+        );
+      });
     }
-    return settlements.filter((s) => {
-      const d = new Date(s.createdAt);
+    return items.filter((it) => {
+      const d = new Date(it.at);
       return (
         d.getFullYear() === monthStart.getFullYear() && d.getMonth() === monthStart.getMonth()
       );
     });
-  }, [settlements, q, searching, monthStart]);
+  }, [items, q, searching, monthStart]);
 
   useEffect(() => setPage(0), [q, monthOffset]);
 
@@ -1239,13 +1284,13 @@ function ActivityTab({
     declined: "text-rose-400",
   };
 
-  if (settlements.length === 0) {
+  if (items.length === 0) {
     return (
       <Card>
         <EmptyState
-          icon={<HandCoins className="h-8 w-8" />}
-          title="No payments yet"
-          subtitle="When someone settles up, it shows here — pending your confirmation."
+          icon={<Clock className="h-8 w-8" />}
+          title="No activity yet"
+          subtitle="Add an expense or settle up — everything that happens in this group shows here."
         />
       </Card>
     );
@@ -1256,7 +1301,7 @@ function ActivityTab({
       <SearchField
         value={query}
         onChange={setQuery}
-        placeholder="Search activity by name, note or status…"
+        placeholder="Search activity by title, name, note…"
       />
 
       {/* Month/year navigator — hidden while searching (results span all months). */}
@@ -1284,21 +1329,52 @@ function ActivityTab({
       {filtered.length === 0 ? (
         <Card>
           <EmptyState
-            icon={searching ? <Search className="h-8 w-8" /> : <HandCoins className="h-8 w-8" />}
+            icon={searching ? <Search className="h-8 w-8" /> : <Clock className="h-8 w-8" />}
             title={searching ? "No matches" : "No activity"}
             subtitle={
               searching
                 ? `Nothing matches “${query.trim()}”.`
-                : `No payments recorded in ${monthLabel}.`
+                : `Nothing happened in ${monthLabel}.`
             }
           />
         </Card>
       ) : (
         <Card className="divide-y divide-white/5 p-1">
-          {slice.map((s) => {
+          {slice.map((it) => {
+            if (it.kind === "expense") {
+              const e = it.exp;
+              const cat = categoryMeta(e.category);
+              return (
+                <button
+                  key={it.id}
+                  onClick={() => onOpenExpense(e.id)}
+                  className="flex w-full items-center gap-3 px-3 py-3 text-left transition hover:bg-white/5"
+                >
+                  <div
+                    className="flex h-11 w-11 items-center justify-center rounded-2xl text-lg"
+                    style={{ background: `${cat.color}26` }}
+                  >
+                    {cat.emoji}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-semibold text-white">
+                      {e.paidBy.id === myId ? "You" : e.paidBy.name} added “{e.title}”
+                    </div>
+                    <div className="truncate text-xs text-white/45">
+                      {fmtDay(e.createdAt)} · {cat.name}
+                    </div>
+                  </div>
+                  <div className="text-sm font-semibold text-white">
+                    {formatMoney(currency, e.amount)}
+                  </div>
+                </button>
+              );
+            }
+
+            const s = it.st;
             const canAct = s.status === "pending" && s.to.id === myId;
             return (
-              <div key={s.id} className="flex items-center gap-3 px-3 py-3">
+              <div key={it.id} className="flex items-center gap-3 px-3 py-3">
                 <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-300">
                   <HandCoins className="h-5 w-5" />
                 </div>

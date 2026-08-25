@@ -1,6 +1,7 @@
 // Non-destructive check for the global expense search endpoint. Registers a
 // unique user, creates a group with a couple of expenses, then verifies
 // GET /api/search returns matching hits carrying their group for deep-linking.
+import "./_guard-local.mjs"; // refuse to run unless targeting local SQLite
 import { spawn } from "node:child_process";
 
 const PORT = process.env.CHECK_PORT || "8803";

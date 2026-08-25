@@ -3,6 +3,7 @@ import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "rea
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
 import { Button, Input, Label } from "./ui";
+import { ImageCropper } from "./ImageCropper";
 import { api, ApiError } from "../lib/api";
 import { CURRENCIES } from "../shared/currency";
 import { GROUP_EMOJIS } from "../shared/categories";
@@ -32,6 +33,9 @@ export function EditGroupSheet({
   // The cover the group had when this sheet opened — used by "Reset" to rollback.
   const [original, setOriginal] = useState<string | null>(group.thumbnail ?? null);
   const [busy, setBusy] = useState(false);
+  // Cropper: the image handed to it (data URL or picked uri) and whether it's open.
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
+  const [cropOpen, setCropOpen] = useState(false);
 
   useEffect(() => {
     if (!visible) return;
@@ -42,17 +46,25 @@ export function EditGroupSheet({
     setOriginal(group.thumbnail ?? null);
   }, [visible, group]);
 
+  // Pick a NEW photo, then hand it straight to the in-app cropper so it's
+  // adjusted/centred the same way an existing cover is.
   async function pick() {
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      quality: 0.6,
-      base64: true,
-      aspect: [16, 9],
+      allowsEditing: false,
+      quality: 1,
     });
-    if (!res.canceled && res.assets[0]?.base64) {
-      setThumb(`data:image/jpeg;base64,${res.assets[0].base64}`);
+    if (!res.canceled && res.assets[0]?.uri) {
+      setCropSrc(res.assets[0].uri);
+      setCropOpen(true);
     }
+  }
+
+  // Re-crop / re-centre the CURRENT cover without re-picking a photo.
+  function adjust() {
+    if (!thumb) return;
+    setCropSrc(thumb);
+    setCropOpen(true);
   }
 
   async function save() {
@@ -99,11 +111,17 @@ export function EditGroupSheet({
               )}
             </Pressable>
 
-            {/* Explicit cover controls: change/crop, remove and reset (rollback). */}
+            {/* Explicit cover controls: change photo, adjust the current one,
+                remove, and reset (rollback to the original). */}
             <View style={styles.coverActions}>
               <Pressable style={styles.coverBtn} onPress={pick}>
-                <Text style={styles.coverBtnTxt}>{thumb ? "🖼 Change / crop" : "🖼 Add photo"}</Text>
+                <Text style={styles.coverBtnTxt}>{thumb ? "🖼 Change photo" : "🖼 Add photo"}</Text>
               </Pressable>
+              {thumb && (
+                <Pressable style={styles.coverBtn} onPress={adjust}>
+                  <Text style={styles.coverBtnTxt}>✂️ Adjust &amp; center</Text>
+                </Pressable>
+              )}
               {thumb && (
                 <Pressable style={styles.coverBtn} onPress={() => setThumb(null)}>
                   <Text style={[styles.coverBtnTxt, { color: theme.colors.red }]}>🗑 Remove</Text>
@@ -145,6 +163,17 @@ export function EditGroupSheet({
           </ScrollView>
         </View>
       </View>
+
+      <ImageCropper
+        visible={cropOpen}
+        src={cropSrc}
+        aspect={16 / 9}
+        onCancel={() => setCropOpen(false)}
+        onDone={(dataUrl) => {
+          setThumb(dataUrl);
+          setCropOpen(false);
+        }}
+      />
     </Modal>
   );
 }

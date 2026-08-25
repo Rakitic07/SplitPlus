@@ -1,20 +1,24 @@
 import "react-native-gesture-handler";
 import React, { useEffect, useState } from "react";
 import { StatusBar } from "expo-status-bar";
-import { View, ActivityIndicator, Text } from "react-native";
+import { View, ActivityIndicator } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { NavigationContainer, DarkTheme } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { Background } from "./src/components/Background";
+import { ShimmerWordmark } from "./src/components/Shimmer";
 import { UpdateModal } from "./src/components/UpdateModal";
 import { AuthProvider, useAuth } from "./src/state/auth";
 import { ToastProvider } from "./src/state/toast";
+import { warmBackend } from "./src/lib/api";
 import {
   checkForUpdate,
   cleanupStaleApk,
   fetchLatest,
   isAndroid,
+  markPrompted,
+  promptedDigest,
 } from "./src/lib/appUpdate";
 import type { AndroidRelease } from "./src/shared/appVersion";
 import { theme } from "./src/theme";
@@ -38,7 +42,7 @@ function Root() {
   if (status === "loading") {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-        <Text style={{ color: "#fff", fontSize: 34, fontWeight: "900" }}>Split+</Text>
+        <ShimmerWordmark text="Split+" textStyle={{ fontSize: 34 }} />
         <ActivityIndicator color={theme.colors.primary} style={{ marginTop: 16 }} />
       </View>
     );
@@ -77,10 +81,11 @@ function UpdateGate() {
       await cleanupStaleApk();
       const release = await fetchLatest();
       const { isUpdate } = await checkForUpdate(release);
-      if (alive && isUpdate && release) {
-        setLatest(release);
-        setShow(true);
-      }
+      if (!alive || !isUpdate || !release) return;
+      // Prompt at most once per release digest — no nagging on every launch.
+      if ((await promptedDigest()) === release.assetSha) return;
+      setLatest(release);
+      setShow(true);
     })();
     return () => {
       alive = false;
@@ -88,10 +93,26 @@ function UpdateGate() {
   }, []);
 
   if (!latest) return null;
-  return <UpdateModal latest={latest} visible={show} onClose={() => setShow(false)} />;
+  return (
+    <UpdateModal
+      latest={latest}
+      visible={show}
+      onClose={() => {
+        setShow(false);
+        // Remember we've surfaced this version so it won't reappear next launch.
+        if (latest.assetSha) markPrompted(latest.assetSha);
+      }}
+    />
+  );
 }
 
 export default function App() {
+  // Warm the serverless backend + database the moment the app opens, so the
+  // first real request doesn't eat the full cold-start wait.
+  useEffect(() => {
+    warmBackend();
+  }, []);
+
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.colors.bg }}>
       <SafeAreaProvider>

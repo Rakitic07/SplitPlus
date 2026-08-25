@@ -34,6 +34,14 @@ API_BASE := https://split-plus.vercel.app/api
 endif
 export EXPO_PUBLIC_API_BASE := $(API_BASE)
 
+# --- Build identity baked into the binary ----------------------------------
+# A value unique to each build (git sha + build timestamp). The app records the
+# BUILD_ID it last ran; when it changes, the app knows a fresh APK was installed
+# and reseeds the update baseline to the current release — so it never falsely
+# prompts to "update" to the exact binary you just installed. (This is why a
+# locally-built sideloaded APK no longer nags about the published release.)
+export EXPO_PUBLIC_BUILD_ID := $(shell git rev-parse --short HEAD 2>/dev/null || echo dev)-$(shell date +%Y%m%d%H%M%S)
+
 # --- Toolchain autodetection ------------------------------------------------
 BREW_PREFIX  := $(shell brew --prefix 2>/dev/null)
 # Reuse a Homebrew Android SDK if present. Override with ANDROID_HOME=... .

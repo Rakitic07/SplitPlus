@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -14,6 +15,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
 import { Avatar, Button, Card, Input, Label } from "../components/ui";
+import { ImagePreview } from "../components/ImagePreview";
 import { api, ApiError, type ShareInputDto } from "../lib/api";
 import { CATEGORIES } from "../shared/categories";
 import { formatMoney } from "../shared/currency";
@@ -22,7 +24,7 @@ import { todayISO } from "../lib/utils";
 import { useToast } from "../state/toast";
 import { theme } from "../theme";
 import type { RootStackParamList } from "../navigation";
-import type { GroupDetail } from "../shared/types";
+import type { Expense, GroupDetail } from "../shared/types";
 
 type Nav = NativeStackNavigationProp<RootStackParamList, "ExpenseForm">;
 type Rt = RouteProp<RootStackParamList, "ExpenseForm">;
@@ -37,37 +39,68 @@ const MODES: { key: SplitMode; label: string }[] = [
 
 export function ExpenseFormScreen() {
   const nav = useNavigation<Nav>();
-  const { groupId } = useRoute<Rt>().params;
+  const { groupId, expenseId } = useRoute<Rt>().params;
   const insets = useSafeAreaInsets();
   const { success, error } = useToast();
 
   const [group, setGroup] = useState<GroupDetail | null>(null);
+  const [editing, setEditing] = useState<Expense | null>(null);
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState(CATEGORIES[0].name);
-  const [date] = useState(todayISO());
+  const [date, setDate] = useState(todayISO());
   const [paidById, setPaidById] = useState("");
   const [notes, setNotes] = useState("");
   const [mode, setMode] = useState<SplitMode>("equal");
   const [shares, setShares] = useState<ShareState>({});
   const [thumb, setThumb] = useState<string | null>(null);
+  const [preview, setPreview] = useState(false);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    api
-      .getGroup(groupId)
-      .then(({ group }) => {
-        setGroup(group);
-        setPaidById(group.myUserId);
-        const st: ShareState = {};
-        for (const m of group.members) st[m.id] = { included: true, value: "" };
-        setShares(st);
-      })
-      .catch(() => {
-        error("Couldn't load group");
+    (async () => {
+      try {
+        // Load the group and, when editing, the full expense (incl. its receipt)
+        // in parallel, then prefill the form from the existing expense.
+        const [{ group: g }, exp] = await Promise.all([
+          api.getGroup(groupId),
+          expenseId ? api.getExpense(groupId, expenseId).then((r) => r.expense) : Promise.resolve(null),
+        ]);
+        setGroup(g);
+        if (exp) {
+          setEditing(exp);
+          setTitle(exp.title);
+          setAmount(String(exp.amount));
+          setCategory(exp.category);
+          setDate(exp.date.slice(0, 10));
+          setPaidById(exp.paidBy.id);
+          setNotes(exp.notes ?? "");
+          setMode(exp.splitMode);
+          setThumb(exp.thumbnail ?? null);
+          const st: ShareState = {};
+          for (const m of g.members) {
+            const share = exp.shares.find((s) => s.userId === m.id);
+            let value = "";
+            if (share) {
+              if (exp.splitMode === "exact") value = String(share.amount);
+              else if (exp.splitMode === "percent") value = String(Math.round((share.amount / exp.amount) * 100));
+              else if (exp.splitMode === "shares") value = String(share.amount);
+            }
+            st[m.id] = { included: !!share, value };
+          }
+          setShares(st);
+        } else {
+          setPaidById(g.myUserId);
+          const st: ShareState = {};
+          for (const m of g.members) st[m.id] = { included: true, value: "" };
+          setShares(st);
+        }
+      } catch {
+        error("Couldn't load expense");
         nav.goBack();
-      });
-  }, [groupId]);
+      }
+    })();
+  }, [groupId, expenseId]);
 
   const amt = Number(amount) || 0;
   const inputs: ShareInputDto[] = useMemo(
@@ -110,19 +143,25 @@ export function ExpenseFormScreen() {
     if (includedCount === 0) return error("Select at least one participant");
     if (splitError) return error(splitError);
     setBusy(true);
+    const payload = {
+      title: title.trim(),
+      category,
+      amount: amt,
+      paidById,
+      date,
+      notes: notes.trim() || undefined,
+      splitMode: mode,
+      thumbnail: thumb ?? "",
+      shares: inputs,
+    };
     try {
-      await api.createExpense(groupId, {
-        title: title.trim(),
-        category,
-        amount: amt,
-        paidById,
-        date,
-        notes: notes.trim() || undefined,
-        splitMode: mode,
-        thumbnail: thumb ?? undefined,
-        shares: inputs,
-      });
-      success("Expense added");
+      if (editing) {
+        await api.updateExpense(groupId, editing.id, payload);
+        success("Expense updated");
+      } else {
+        await api.createExpense(groupId, payload);
+        success("Expense added");
+      }
       nav.goBack();
     } catch (err) {
       error(err instanceof ApiError ? err.message : "Couldn't save");
@@ -131,13 +170,33 @@ export function ExpenseFormScreen() {
     }
   }
 
+  function confirmDelete() {
+    if (!editing) return;
+    Alert.alert("Delete expense", `Remove "${editing.title}"? This can't be undone.`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await api.deleteExpense(groupId, editing.id);
+            success("Expense deleted");
+            nav.goBack();
+          } catch (err) {
+            error(err instanceof ApiError ? err.message : "Couldn't delete");
+          }
+        },
+      },
+    ]);
+  }
+
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
       <View style={[styles.head, { paddingTop: insets.top + 8 }]}>
         <Pressable onPress={() => nav.goBack()}>
           <Text style={{ color: theme.colors.textDim, fontSize: 16 }}>Cancel</Text>
         </Pressable>
-        <Text style={styles.headTitle}>Add expense</Text>
+        <Text style={styles.headTitle}>{editing ? "Edit expense" : "Add expense"}</Text>
         <View style={{ width: 50 }} />
       </View>
 
@@ -256,7 +315,12 @@ export function ExpenseFormScreen() {
           <Label>Receipt / screenshot</Label>
           {thumb ? (
             <View>
-              <Image source={{ uri: thumb }} style={{ height: 120, borderRadius: 16 }} resizeMode="cover" />
+              <Pressable onPress={() => setPreview(true)}>
+                <Image source={{ uri: thumb }} style={{ height: 120, borderRadius: 16 }} resizeMode="cover" />
+                <View style={styles.tapHint}>
+                  <Text style={{ color: "#fff", fontSize: 12, fontWeight: "700" }}>Tap to preview</Text>
+                </View>
+              </Pressable>
               <Pressable onPress={() => setThumb(null)} style={styles.removeImg}>
                 <Text style={{ color: "#fff" }}>✕</Text>
               </Pressable>
@@ -268,8 +332,16 @@ export function ExpenseFormScreen() {
           )}
         </View>
 
-        <Button title="Add expense" onPress={save} loading={busy} />
+        <Button title={editing ? "Save changes" : "Add expense"} onPress={save} loading={busy} />
+
+        {editing && (
+          <Pressable onPress={confirmDelete} style={{ alignSelf: "center", paddingVertical: 8 }}>
+            <Text style={{ color: theme.colors.red, fontWeight: "700" }}>Delete expense</Text>
+          </Pressable>
+        )}
       </ScrollView>
+
+      <ImagePreview visible={preview} src={thumb} onClose={() => setPreview(false)} />
     </KeyboardAvoidingView>
   );
 }
@@ -293,4 +365,5 @@ const styles = StyleSheet.create({
   warn: { backgroundColor: "rgba(255,212,59,0.1)", borderColor: "rgba(255,212,59,0.3)", borderWidth: 1, borderRadius: 12, padding: 10 },
   attach: { height: 72, borderRadius: 16, borderWidth: 1, borderStyle: "dashed", borderColor: theme.colors.border, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.05)" },
   removeImg: { position: "absolute", top: -8, right: -8, backgroundColor: theme.colors.red, width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  tapHint: { position: "absolute", bottom: 8, right: 8, backgroundColor: "rgba(0,0,0,0.55)", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
 });

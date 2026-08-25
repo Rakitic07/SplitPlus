@@ -224,6 +224,27 @@ body {
   }
 }
 
+/* ---------- iOS PWA safe-area helpers ----------
+   When installed to the Home Screen (display: standalone) with
+   `apple-mobile-web-app-status-bar-style: black-translucent`, the web view
+   extends UNDER the notch / Dynamic Island, so top-anchored controls end up
+   behind it and stop receiving taps. These push content into the safe area.
+   In a normal browser tab every inset resolves to 0, so they are no-ops. */
+@layer utilities {
+  /* Add the top inset ON TOP of whatever padding the element already has. */
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+  /* Floating cover action bar: keep the 1rem baseline in a browser, but drop
+     the buttons clear below the notch when installed as a PWA. */
+  .pt-safe-bar {
+    padding-top: max(1rem, calc(env(safe-area-inset-top) + 0.5rem));
+  }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 10px;

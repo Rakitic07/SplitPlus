@@ -13,18 +13,31 @@ import {
   Check,
   Cpu,
   Database,
+  FolderCog,
   HardDrive,
   Image,
   LifeBuoy,
+  Pencil,
   RefreshCw,
+  Search,
   ShieldCheck,
+  Trash2,
   TrendingUp,
   Users,
   X,
 } from "lucide-react";
-import { Button, Card, EmptyState, Field, PasswordInput } from "@/components/ui";
+import { Button, Card, EmptyState, Field, Input, PasswordInput } from "@/components/ui";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { LogoMark } from "@/components/Logo";
-import { api, ApiError, type AdminMetrics, type AdminResetRequest } from "@/lib/api";
+import { CURRENCIES } from "@shared/currency";
+import {
+  api,
+  ApiError,
+  type AdminGroup,
+  type AdminMetrics,
+  type AdminResetRequest,
+  type AdminUser,
+} from "@/lib/api";
 import { useToast } from "@/state/toast";
 
 const SECRET_KEY = "splitplus_admin_secret";
@@ -462,12 +475,385 @@ function MetricsView({ m }: { m: AdminMetrics }) {
   );
 }
 
+// ── search box ────────────────────────────────────────────────────────────
+function SearchBox({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <div className="relative">
+      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" />
+      <Input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="!pl-9"
+      />
+    </div>
+  );
+}
+
+// ── users management ──────────────────────────────────────────────────────
+function UsersView({ secret }: { secret: string }) {
+  const { success, error } = useToast();
+  const [q, setQ] = useState("");
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [toDelete, setToDelete] = useState<AdminUser | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const load = useCallback(
+    async (query: string) => {
+      setLoading(true);
+      try {
+        const { users } = await api.adminListUsers(secret, query);
+        setUsers(users);
+      } catch (err) {
+        error(err instanceof ApiError ? err.message : "Couldn't load users");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [secret, error]
+  );
+
+  // Debounced search.
+  useEffect(() => {
+    const t = setTimeout(() => load(q), 250);
+    return () => clearTimeout(t);
+  }, [q, load]);
+
+  async function saveName(u: AdminUser) {
+    const name = draft.trim();
+    if (!name || name === u.name) {
+      setEditingId(null);
+      return;
+    }
+    setSavingId(u.id);
+    try {
+      const { user } = await api.adminUpdateUser(secret, u.id, name);
+      setUsers((list) => list.map((x) => (x.id === u.id ? { ...x, name: user.name } : x)));
+      setEditingId(null);
+      success("User renamed");
+    } catch (err) {
+      error(err instanceof ApiError ? err.message : "Couldn't rename user");
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function remove() {
+    if (!toDelete) return;
+    setDeleting(true);
+    try {
+      await api.adminDeleteUser(secret, toDelete.id);
+      setUsers((list) => list.filter((x) => x.id !== toDelete.id));
+      success(`Deleted ${toDelete.name}`);
+      setToDelete(null);
+    } catch (err) {
+      error(err instanceof ApiError ? err.message : "Couldn't delete user");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <SearchBox value={q} onChange={setQ} placeholder="Search users by name…" />
+
+      {loading ? (
+        <div className="pt-8 text-center text-white/40">Loading users…</div>
+      ) : users.length === 0 ? (
+        <Card>
+          <EmptyState icon={<Users className="h-8 w-8" />} title="No users" subtitle="No accounts match your search." />
+        </Card>
+      ) : (
+        <div className="space-y-2">
+          {users.map((u) => (
+            <Card key={u.id} className="p-4">
+              {editingId === u.id ? (
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    maxLength={40}
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") saveName(u);
+                      if (e.key === "Escape") setEditingId(null);
+                    }}
+                  />
+                  <Button className="!px-3" loading={savingId === u.id} onClick={() => saveName(u)}>
+                    <Check className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" className="!px-3" onClick={() => setEditingId(null)}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="truncate text-base font-bold text-white">{u.name}</div>
+                    <div className="mt-0.5 text-xs text-white/45">
+                      {u.ownedGroups} owned · {u.memberships} groups · {u.paidExpenses} paid ·{" "}
+                      {new Date(u.createdAt).toLocaleDateString(undefined, {
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <button
+                      onClick={() => {
+                        setDraft(u.name);
+                        setEditingId(u.id);
+                      }}
+                      className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/70 transition hover:bg-white/10"
+                    >
+                      <Pencil className="h-3.5 w-3.5" /> Rename
+                    </button>
+                    <button
+                      onClick={() => setToDelete(u)}
+                      className="flex items-center gap-1 rounded-full border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-300 transition hover:bg-rose-500/20"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" /> Delete
+                    </button>
+                  </div>
+                </div>
+              )}
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={!!toDelete}
+        danger
+        loading={deleting}
+        title={`Delete ${toDelete?.name ?? "user"}?`}
+        confirmLabel="Delete account"
+        message={
+          <>
+            This permanently removes the account
+            {toDelete && toDelete.ownedGroups > 0 && (
+              <>
+                {" "}
+                and the <b>{toDelete.ownedGroups}</b> group{toDelete.ownedGroups > 1 ? "s" : ""} they own
+                (with all expenses inside)
+              </>
+            )}
+            . Expenses they paid in other groups are also removed. This can't be undone.
+          </>
+        }
+        onConfirm={remove}
+        onCancel={() => setToDelete(null)}
+      />
+    </div>
+  );
+}
+
+// ── groups management ─────────────────────────────────────────────────────
+function GroupsView({ secret }: { secret: string }) {
+  const { success, error } = useToast();
+  const [q, setQ] = useState("");
+  const [groups, setGroups] = useState<AdminGroup[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [name, setName] = useState("");
+  const [emoji, setEmoji] = useState("");
+  const [currency, setCurrency] = useState("INR");
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [toDelete, setToDelete] = useState<AdminGroup | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const load = useCallback(
+    async (query: string) => {
+      setLoading(true);
+      try {
+        const { groups } = await api.adminListGroups(secret, query);
+        setGroups(groups);
+      } catch (err) {
+        error(err instanceof ApiError ? err.message : "Couldn't load groups");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [secret, error]
+  );
+
+  useEffect(() => {
+    const t = setTimeout(() => load(q), 250);
+    return () => clearTimeout(t);
+  }, [q, load]);
+
+  function startEdit(g: AdminGroup) {
+    setName(g.name);
+    setEmoji(g.emoji ?? "");
+    setCurrency(g.currency);
+    setEditingId(g.id);
+  }
+
+  async function save(g: AdminGroup) {
+    const nm = name.trim();
+    if (!nm) {
+      error("Group name is required");
+      return;
+    }
+    setSavingId(g.id);
+    try {
+      const { group } = await api.adminUpdateGroup(secret, g.id, {
+        name: nm,
+        currency,
+        emoji: emoji.trim(),
+      });
+      setGroups((list) =>
+        list.map((x) =>
+          x.id === g.id ? { ...x, name: group.name, emoji: group.emoji, currency: group.currency } : x
+        )
+      );
+      setEditingId(null);
+      success("Group updated");
+    } catch (err) {
+      error(err instanceof ApiError ? err.message : "Couldn't update group");
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function remove() {
+    if (!toDelete) return;
+    setDeleting(true);
+    try {
+      await api.adminDeleteGroup(secret, toDelete.id);
+      setGroups((list) => list.filter((x) => x.id !== toDelete.id));
+      success(`Deleted ${toDelete.name}`);
+      setToDelete(null);
+    } catch (err) {
+      error(err instanceof ApiError ? err.message : "Couldn't delete group");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <SearchBox value={q} onChange={setQ} placeholder="Search groups by name…" />
+
+      {loading ? (
+        <div className="pt-8 text-center text-white/40">Loading groups…</div>
+      ) : groups.length === 0 ? (
+        <Card>
+          <EmptyState icon={<FolderCog className="h-8 w-8" />} title="No groups" subtitle="No groups match your search." />
+        </Card>
+      ) : (
+        <div className="space-y-2">
+          {groups.map((g) => (
+            <Card key={g.id} className="p-4">
+              {editingId === g.id ? (
+                <div className="space-y-3">
+                  <div className="flex gap-2">
+                    <Input
+                      value={emoji}
+                      onChange={(e) => setEmoji(e.target.value)}
+                      placeholder="👥"
+                      maxLength={8}
+                      className="!w-16 text-center"
+                    />
+                    <Input
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      maxLength={60}
+                      autoFocus
+                      placeholder="Group name"
+                    />
+                  </div>
+                  <select
+                    value={currency}
+                    onChange={(e) => setCurrency(e.target.value)}
+                    className="glass-input appearance-none"
+                  >
+                    {CURRENCIES.map((c) => (
+                      <option key={c.code} value={c.code} className="bg-[#1c1710]">
+                        {c.symbol} {c.code} — {c.label}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="ghost" onClick={() => setEditingId(null)}>
+                      Cancel
+                    </Button>
+                    <Button loading={savingId === g.id} onClick={() => save(g)}>
+                      <Check className="h-4 w-4" /> Save
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="text-2xl">{g.emoji ?? "👥"}</span>
+                    <div className="min-w-0">
+                      <div className="truncate text-base font-bold text-white">{g.name}</div>
+                      <div className="mt-0.5 text-xs text-white/45">
+                        {g.currency} · {g.members} members · {g.expenses} expenses · owner{" "}
+                        {g.owner?.name ?? "—"}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <button
+                      onClick={() => startEdit(g)}
+                      className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/70 transition hover:bg-white/10"
+                    >
+                      <Pencil className="h-3.5 w-3.5" /> Edit
+                    </button>
+                    <button
+                      onClick={() => setToDelete(g)}
+                      className="flex items-center gap-1 rounded-full border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-300 transition hover:bg-rose-500/20"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" /> Delete
+                    </button>
+                  </div>
+                </div>
+              )}
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={!!toDelete}
+        danger
+        loading={deleting}
+        title={`Delete ${toDelete?.name ?? "group"}?`}
+        confirmLabel="Delete group"
+        message={
+          <>
+            This permanently removes the group and its <b>{toDelete?.expenses ?? 0}</b> expense
+            {toDelete?.expenses === 1 ? "" : "s"}, {toDelete?.members ?? 0} membership
+            {toDelete?.members === 1 ? "" : "s"}, and all settlements. This can't be undone.
+          </>
+        }
+        onConfirm={remove}
+        onCancel={() => setToDelete(null)}
+      />
+    </div>
+  );
+}
+
 // ── page ─────────────────────────────────────────────────────────────────
 export function AdminPage() {
   const { success, error } = useToast();
   const [secret, setSecret] = useState("");
   const [authed, setAuthed] = useState(false);
-  const [tab, setTab] = useState<"overview" | "requests">("overview");
+  const [tab, setTab] = useState<"overview" | "users" | "groups" | "requests">("overview");
   const [metrics, setMetrics] = useState<AdminMetrics | null>(null);
   const [requests, setRequests] = useState<AdminResetRequest[]>([]);
   const [loading, setLoading] = useState(false);
@@ -528,7 +914,7 @@ export function AdminPage() {
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-30 border-b border-white/10 bg-[#0a0807]/70 backdrop-blur-xl">
+      <header className="pt-safe sticky top-0 z-30 border-b border-white/10 bg-[#0a0807]/70 backdrop-blur-xl">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
           <div className="flex items-center gap-2">
             <LogoMark size={28} />
@@ -552,16 +938,18 @@ export function AdminPage() {
           </div>
         </div>
         {authed && (
-          <div className="mx-auto flex max-w-5xl gap-1 px-4 pb-2">
-            {(["overview", "requests"] as const).map((tb) => (
+          <div className="mx-auto flex max-w-5xl gap-1 overflow-x-auto px-4 pb-2">
+            {(["overview", "users", "groups", "requests"] as const).map((tb) => (
               <button
                 key={tb}
                 onClick={() => setTab(tb)}
-                className={`rounded-full px-4 py-1.5 text-sm font-semibold capitalize transition ${
+                className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold capitalize transition ${
                   tab === tb ? "bg-white/15 text-white" : "text-white/50 hover:text-white/80"
                 }`}
               >
-                {tb === "requests" ? `Recovery${pending.length ? ` (${pending.length})` : ""}` : "Overview"}
+                {tb === "requests"
+                  ? `Recovery${pending.length ? ` (${pending.length})` : ""}`
+                  : tb}
               </button>
             ))}
           </div>
@@ -605,6 +993,10 @@ export function AdminPage() {
           ) : (
             <div className="pt-10 text-center text-white/40">Loading metrics…</div>
           )
+        ) : tab === "users" ? (
+          <UsersView secret={secret} />
+        ) : tab === "groups" ? (
+          <GroupsView secret={secret} />
         ) : (
           <div className="space-y-6">
             <div>

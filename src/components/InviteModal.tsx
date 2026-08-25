@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Clock, Copy, MessageCircle, Search, UserPlus } from "lucide-react";
+import { Clock, Copy, Link2, MessageCircle, Search, UserPlus } from "lucide-react";
 import { Modal } from "@/components/Modal";
 import { Avatar, Button, Field, Input } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
@@ -19,14 +19,21 @@ export function InviteModal({
 }) {
   const { success, error } = useToast();
 
-  // A shareable message pointing friends to the app. There's no public join
-  // link (invites are accepted in-app), so this nudges them to sign in and
-  // check their invites — great for phone + web via WhatsApp.
+  // The group's shareable "join link" — anyone who opens it can sign in/up and
+  // land straight in the group (no need to be invited by name first). Fetched
+  // when the modal opens; falls back to just the app URL until it loads.
+  const [joinUrl, setJoinUrl] = useState<string | null>(null);
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+
+  // A shareable message pointing friends to the private join link. Opening it
+  // lets them sign in and join in one step — great for phone + web via WhatsApp.
   const inviteMessage = `Hey! Join me on Split+${
     groupName ? ` for "${groupName}"` : ""
-  } so we can split our expenses. Open ${
-    typeof window !== "undefined" ? window.location.origin : "the app"
-  }, sign in with your name, and accept the invite from your home screen. 💸`;
+  } so we can split our expenses. ${
+    joinUrl
+      ? `Tap this link, sign in with your name, and you're in: ${joinUrl}`
+      : `Open ${origin || "the app"}, sign in, and accept the invite from your home screen.`
+  } 💸`;
 
   function shareWhatsApp() {
     const url = `https://wa.me/?text=${encodeURIComponent(inviteMessage)}`;
@@ -52,7 +59,21 @@ export function InviteModal({
       .groupInvites(groupId)
       .then((r) => setPending(r.invites))
       .catch(() => {});
-  }, [open, groupId]);
+    api
+      .getJoinLink(groupId)
+      .then((r) => setJoinUrl(`${origin}/join/${r.token}`))
+      .catch(() => {});
+  }, [open, groupId, origin]);
+
+  async function copyLink() {
+    if (!joinUrl) return;
+    try {
+      await navigator.clipboard.writeText(joinUrl);
+      success("Invite link copied");
+    } catch {
+      error("Couldn't copy");
+    }
+  }
 
   // Debounced user search (min 3 chars).
   useEffect(() => {
@@ -125,11 +146,23 @@ export function InviteModal({
           </p>
         )}
 
-        {/* Share via WhatsApp / copy — nudge friends to sign in & accept. */}
+        {/* Share the private join link — friends sign in and land in the group. */}
         <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
           <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-white/40">
-            Or share an invite
+            Or share an invite link
           </div>
+          {joinUrl && (
+            <button
+              type="button"
+              onClick={copyLink}
+              className="mb-2 flex w-full items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-left text-xs text-white/70 transition hover:bg-white/10"
+              title="Copy invite link"
+            >
+              <Link2 className="h-3.5 w-3.5 shrink-0 text-white/40" />
+              <span className="flex-1 truncate">{joinUrl}</span>
+              <Copy className="h-3.5 w-3.5 shrink-0 text-white/40" />
+            </button>
+          )}
           <div className="flex gap-2">
             <button
               type="button"
