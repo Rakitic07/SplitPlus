@@ -1,0 +1,200 @@
+shared/appVersion.ts
+  s_cb0fba85de97fe::t_c5f249619a70a5 11-13
+  s_cb0fba85de97fe::t_ff89a855aba342 1-5,7-10,14-36
+  s_cb0fba85de97fe::t_a5a1579768b8a1 6
+mobile/src/lib/storage.ts
+  s_cb0fba85de97fe::t_85bf1a93b29148 21-34
+mobile/android/build.gradle
+  s_cb0fba85de97fe::t_f757c2b70563df 20-22
+  s_cb0fba85de97fe::t_eea854e1564a1b 17-19
+  s_cb0fba85de97fe::t_fc83e1f29a7aaf 23-25
+server/routes/admin.ts
+  s_cb0fba85de97fe::t_398a82b3e646be 373-376,379-386
+  s_cb0fba85de97fe::t_e4e6ba87b060ac 462
+  s_cb0fba85de97fe::t_4b6eac07d44da7 82-103,111,113-188,190-249,252-253
+  s_cb0fba85de97fe::t_32181933c1d509 104-110,112
+  s_cb0fba85de97fe::t_097f20fd76c98b 189
+  s_cb0fba85de97fe::t_dd37117d4da4f0 449,456,458-461,463
+mobile/src/components/MembersSheet.tsx
+  s_cb0fba85de97fe::t_14980b5d0b3cb2 1-74
+scripts/og.mjs
+  s_cb0fba85de97fe::t_a91d46f4f5f225 1-63
+mobile/src/components/EditGroupSheet.tsx
+  s_cb0fba85de97fe::t_a9d6378fe29e8a 1-137
+mobile/src/lib/appUpdate.ts
+  s_cb0fba85de97fe::t_3d8d653ebffa7d 1-76
+mobile/src/screens/HomeScreen.tsx
+  s_cb0fba85de97fe::t_5983c09920b14a 163-210
+  s_cb0fba85de97fe::t_ab0dbcf339d746 71-90
+  s_cb0fba85de97fe::t_e99fd56019d4bd 3
+  s_cb0fba85de97fe::t_8a1f2137add405 19
+  s_cb0fba85de97fe::t_8a01a834d2ba03 47
+  s_cb0fba85de97fe::t_f6c1674686b41a 330
+  s_cb0fba85de97fe::t_e431f39debd240 453-454
+  s_cb0fba85de97fe::t_2f7175655223ca 1
+  s_cb0fba85de97fe::t_da488e3137997c 139-145
+  s_cb0fba85de97fe::t_13b55903ebbe06 91-109
+  s_cb0fba85de97fe::t_b13689bb4dbfc9 20,22
+  s_cb0fba85de97fe::t_c2a0dcd55a8a08 23
+  s_cb0fba85de97fe::t_5955b79eec6464 48-53
+  s_cb0fba85de97fe::t_28aefacd09ec90 455-463
+  s_cb0fba85de97fe::t_b2844bd955841f 331
+  s_cb0fba85de97fe::t_e1c4ac8887f896 253-260
+  s_cb0fba85de97fe::t_8348dbffe0635f 38
+mobile/src/components/ExportSheet.tsx
+  s_cb0fba85de97fe::t_d852fb6738f2af 1-266
+server/app.ts
+  s_cb0fba85de97fe::t_bd5b2a0473773f 44
+  s_cb0fba85de97fe::t_ce8588edde1f3b 11
+  s_cb0fba85de97fe::t_e6a6c2227f9980 10
+  s_cb0fba85de97fe::t_7926bc85340e07 43
+src/pages/HomePage.tsx
+  s_cb0fba85de97fe::t_2e0694a0124563 51-72
+  s_cb0fba85de97fe::t_7bd04e5c13ab95 436
+  s_cb0fba85de97fe::t_a9da4675a0c2ea 172-235
+  s_cb0fba85de97fe::t_9e654ceca87b57 10,12-13
+  s_cb0fba85de97fe::t_a1b71f14a0ef2d 4,9
+  s_cb0fba85de97fe::t_c97397cbe3d600 49
+  s_cb0fba85de97fe::t_7028fa96d647df 328-341
+  s_cb0fba85de97fe::t_06155d774c9168 50
+mobile/Makefile
+  s_cb0fba85de97fe::t_848782c036cc52 1-148
+src/lib/api.ts
+  s_cb0fba85de97fe::t_1278a475e3c3be 150-161
+  s_cb0fba85de97fe::t_395b11e7d8cb64 302-306
+  s_cb0fba85de97fe::t_de6e321fdfd07c 162-177
+  s_cb0fba85de97fe::t_72238d291bf9a5 296-301
+  s_cb0fba85de97fe::t_32e9bd8a290a71 104-117,124,128-129
+src/components/EditGroupModal.tsx
+  s_cb0fba85de97fe::t_7dfb23be7a504b 1-170
+scripts/check-search.mjs
+  s_cb0fba85de97fe::t_1aa0d8e6b96633 1-113
+index.html
+  s_cb0fba85de97fe::t_a8be8aa152b5c0 9,11-14,18-30
+mobile/src/lib/export.ts
+  s_cb0fba85de97fe::t_df2334db71b7fc 1-106
+scripts/check-metrics.mjs
+  s_cb0fba85de97fe::t_f661728263294c 37-43
+src/lib/export.ts
+  s_cb0fba85de97fe::t_362203b76075bb 138-139,141
+  s_cb0fba85de97fe::t_e479449da5811a 1-137,140,142-252
+src/pages/AdminPage.tsx
+  s_cb0fba85de97fe::t_eca57df662fae3 209
+  s_cb0fba85de97fe::t_92efb1569b2fca 102,106,117
+  s_cb0fba85de97fe::t_88758b39ce81ea 225
+  s_cb0fba85de97fe::t_aa9ca14cb243d7 15,17
+  s_cb0fba85de97fe::t_3b7fb71835c4d3 161-208,210-224,226-237
+  s_cb0fba85de97fe::t_a1ff6d54d08e64 397-399,406,411,413-426
+server/routes/version.ts
+  s_cb0fba85de97fe::t_d273d8efd08929 1-94
+src/components/ExportModal.tsx
+  s_cb0fba85de97fe::t_8ae089d125d9d4 1-5,8-335,337-343
+  s_cb0fba85de97fe::t_04b27bd1c1c1fc 6-7
+  s_cb0fba85de97fe::t_b2d07b1c455983 336
+server/routes/search.ts
+  s_cb0fba85de97fe::t_775ef5515a83d8 1-76
+  s_cb0fba85de97fe::t_2e75eba323e07e 77-134
+src/pages/GroupPage.tsx
+  s_cb0fba85de97fe::t_5296adb21f2f01 39
+  s_cb0fba85de97fe::t_70be5fd3dc1bbd 111-112
+  s_cb0fba85de97fe::t_55004d6ef69cfe 1,3
+  s_cb0fba85de97fe::t_512a1d2c5f4160 2
+  s_cb0fba85de97fe::t_cb591d790ea8c7 511-516
+  s_cb0fba85de97fe::t_4622a75d233a65 380,391,396-446
+  s_cb0fba85de97fe::t_f02ee48d57b2ca 517-523
+  s_cb0fba85de97fe::t_ff39be9d2d03e9 19
+  s_cb0fba85de97fe::t_7fbafdb7f9d44d 560-636,648-668,680,682-695
+  s_cb0fba85de97fe::t_fdf41fab9dd3ab 743-753
+  s_cb0fba85de97fe::t_547a7b720763c1 40
+  s_cb0fba85de97fe::t_f9d44b9b5d2cbe 117
+  s_cb0fba85de97fe::t_2c06c399bda589 98
+  s_cb0fba85de97fe::t_4bbcc78756e5d9 11-12,23
+  s_cb0fba85de97fe::t_f57037ae287da1 238-262
+  s_cb0fba85de97fe::t_dba18c9c3a96cf 1191-1241,1253,1255-1335,1337-1349
+  s_cb0fba85de97fe::t_5487d252f9c41e 61-94
+  s_cb0fba85de97fe::t_fbd6c88e3af11a 286,288-289,292-293,295-312
+  s_cb0fba85de97fe::t_37165ede38cef8 147-169
+  s_cb0fba85de97fe::t_3c7cbfe3e16b4d 15
+scripts/check-export.mjs
+  s_cb0fba85de97fe::t_f218a32fa49668 1-108
+mobile/src/screens/GroupScreen.tsx
+  s_cb0fba85de97fe::t_ac9249b5e1fb34 48
+  s_cb0fba85de97fe::t_2818e2bc2c0942 295
+  s_cb0fba85de97fe::t_8fbcc749faebda 78
+  s_cb0fba85de97fe::t_28adf0154c1883 381,894-904,907-923,925-940,942-945,950-969,977-1034
+  s_cb0fba85de97fe::t_b3571a0a36d1a4 216-220,234-238
+  s_cb0fba85de97fe::t_8b54edced1ed46 74,79-80
+  s_cb0fba85de97fe::t_9141afff7fe83c 372-379
+  s_cb0fba85de97fe::t_2f7026d4face36 270-271,279-289
+  s_cb0fba85de97fe::t_fc64931af2de83 6,10,22-23,26,33-42,46,49-59
+  s_cb0fba85de97fe::t_d17bdf4661e2e2 21
+  s_cb0fba85de97fe::t_fae7c807edb389 348-371
+  s_cb0fba85de97fe::t_af896652395d79 319,321-328
+  s_cb0fba85de97fe::t_7c9fe3667fafd9 215,221-227
+  s_cb0fba85de97fe::t_40a962812b7017 4,15
+  s_cb0fba85de97fe::t_defb3c99edc459 384-528
+  s_cb0fba85de97fe::t_75557cf0024047 125,130,138,151-161
+  s_cb0fba85de97fe::t_de30f8fc0b0a5c 380,382,595-598,610-655,663-754,756-789,791-809,811-827,829-889
+  s_cb0fba85de97fe::t_a3135861f09d88 1
+  s_cb0fba85de97fe::t_ac3b9b84653e2d 82-121
+  s_cb0fba85de97fe::t_25e7c64c9a9178 330-331
+  s_cb0fba85de97fe::t_0074ab517053e0 1076-1109
+  s_cb0fba85de97fe::t_7f6400faa33ec7 272-273
+  s_cb0fba85de97fe::t_d089b7c88e9e19 47
+  s_cb0fba85de97fe::t_3a90eb09d7f1c9 81
+  s_cb0fba85de97fe::t_40d6ee2084ba14 383
+src/pages/AuthPage.tsx
+  s_cb0fba85de97fe::t_1d89b171ef9a7e 4,12
+  s_cb0fba85de97fe::t_f143efdd076886 159-178
+mobile/src/components/SettingsSheet.tsx
+  s_cb0fba85de97fe::t_3ea643434e9727 1-185
+mobile/src/state/auth.tsx
+  s_cb0fba85de97fe::t_df1d7acad25ff8 72
+  s_cb0fba85de97fe::t_8700659fd2bc99 10,16-17,28
+mobile/src/shared/appVersion.ts
+  s_cb0fba85de97fe::t_7f4cbd2bc2504f 7
+  s_cb0fba85de97fe::t_5497b3997e7a49 3
+  s_cb0fba85de97fe::t_745bb21b6e5a2d 1-2,4-6,8-15
+mobile/src/lib/api.ts
+  s_cb0fba85de97fe::t_3b86abe2e4dd46 20-22
+  s_cb0fba85de97fe::t_e99c96f1e08dc6 56-69
+  s_cb0fba85de97fe::t_e140966a729829 8,12-14
+  s_cb0fba85de97fe::t_94e59f0c311799 104,107,115,123,140-145
+  s_cb0fba85de97fe::t_0d33351be34180 147-150
+  s_cb0fba85de97fe::t_ae64b3aed23089 161-166,176-184,195-198
+  s_cb0fba85de97fe::t_79de8af7eab038 18
+  s_cb0fba85de97fe::t_5c5c8e54784761 70-88
+  s_cb0fba85de97fe::t_4e7a372b94dfb5 146,199,240-244
+  s_cb0fba85de97fe::t_7858baf926abaf 19
+mobile/app.json
+  s_cb0fba85de97fe::t_5c2cdbcd86ad55 16-18,36-37
+mobile/package-lock.json
+  s_cb0fba85de97fe::t_c7e06e3846daa5 15-16,19-20,5930-5973,6070-6073,6080-6083,6086,6089-6092,6095
+mobile/package.json
+  s_cb0fba85de97fe::t_52721ccb908968 8-9,17-18,21-22
+package-lock.json
+  s_cb0fba85de97fe::t_718d1c66b95dee 19,2673-2678
+package.json
+  s_cb0fba85de97fe::t_a062434ad3d305 26
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "b17a7bdb8da3f9546d11762671d86adbbb8168b3",
+  "prompts": {},
+  "humans": {
+    "h_e5e8219ccbe631": {
+      "author": "Rakitic <rokktim07@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_cb0fba85de97fe": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "734c7345-66fa-44f9-a3c2-de3b88fff4a0",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Rakitic <rokktim07@gmail.com>"
+    }
+  }
+}
