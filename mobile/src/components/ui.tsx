@@ -2,17 +2,35 @@ import React from "react";
 import {
   ActivityIndicator,
   Image,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
+  type StyleProp,
   type TextInputProps,
   type ViewStyle,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { theme } from "../theme";
 import { colorForName, initials } from "../lib/utils";
+import { ToastView } from "../state/toast";
+
+/**
+ * Root of a bottom sheet inside an RN <Modal>. Lifts the sheet above the iOS
+ * keyboard (Android modals already resize for it) and hosts a toast, since the
+ * app-level toast is drawn underneath the modal's window.
+ */
+export function SheetRoot({ style, children }: { style: StyleProp<ViewStyle>; children: React.ReactNode }) {
+  return (
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={style}>
+      {children}
+      <ToastView />
+    </KeyboardAvoidingView>
+  );
+}
 
 export function Card({
   children,
@@ -31,6 +49,7 @@ export function Card({
           backgroundColor: strong ? theme.colors.cardStrong : theme.colors.card,
           borderColor: theme.colors.border,
         },
+        theme.surface.raised,
         style,
       ]}
     >
@@ -64,7 +83,15 @@ export function Button({
   );
   if (variant === "primary") {
     return (
-      <Pressable onPress={onPress} disabled={disabled || loading} style={[{ opacity: disabled ? 0.6 : 1 }, style]}>
+      <Pressable
+        onPress={onPress}
+        disabled={disabled || loading}
+        style={({ pressed }) => [
+          { opacity: disabled ? 0.6 : 1, borderRadius: theme.radius.md },
+          theme.mode === "neumorph" && !pressed && theme.surface.raised,
+          style,
+        ]}
+      >
         <LinearGradient
           colors={theme.gradients.primary}
           start={{ x: 0, y: 0 }}
@@ -80,7 +107,13 @@ export function Button({
     <Pressable
       onPress={onPress}
       disabled={disabled || loading}
-      style={[styles.btn, styles.btnGhost, { opacity: disabled ? 0.6 : 1 }, style]}
+      style={({ pressed }) => [
+        styles.btn,
+        styles.btnGhost,
+        { opacity: disabled ? 0.6 : 1 },
+        pressed ? theme.surface.inset : theme.surface.raised,
+        style,
+      ]}
     >
       {content}
     </Pressable>
@@ -92,7 +125,7 @@ export function Input(props: TextInputProps) {
     <TextInput
       placeholderTextColor={theme.colors.textFaint}
       {...props}
-      style={[styles.input, props.style]}
+      style={[styles.input, theme.surface.inset, props.style]}
     />
   );
 }
@@ -105,16 +138,18 @@ export function Avatar({
   name,
   uri,
   size = 40,
+  radius = size / 2,
 }: {
   name: string;
   uri?: string | null;
   size?: number;
+  radius?: number;
 }) {
   if (uri) {
     return (
       <Image
         source={{ uri }}
-        style={{ width: size, height: size, borderRadius: size / 2 }}
+        style={{ width: size, height: size, borderRadius: radius }}
         resizeMode="cover"
       />
     );
@@ -124,7 +159,7 @@ export function Avatar({
       style={{
         width: size,
         height: size,
-        borderRadius: size / 2,
+        borderRadius: radius,
         backgroundColor: colorForName(name),
         alignItems: "center",
         justifyContent: "center",
@@ -151,6 +186,7 @@ export function Pill({
       onPress={onPress}
       style={[
         styles.pill,
+        active ? theme.surface.inset : theme.surface.raised,
         active && { borderColor: color ?? "#fff", backgroundColor: (color ?? "#ffffff") + "26" },
       ]}
     >
@@ -176,11 +212,11 @@ export function Empty({ title, subtitle, emoji }: { title: string; subtitle?: st
 const styles = StyleSheet.create({
   card: { borderRadius: theme.radius.lg, borderWidth: 1, overflow: "hidden" },
   btn: { borderRadius: theme.radius.md, paddingVertical: 14, paddingHorizontal: 18, alignItems: "center" },
-  btnGhost: { borderWidth: 1, borderColor: theme.colors.border, backgroundColor: "rgba(255,255,255,0.08)" },
+  btnGhost: { borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.card },
   btnInner: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   btnText: { color: "#fff", fontWeight: "700", fontSize: 15 },
   input: {
-    backgroundColor: "rgba(255,255,255,0.08)",
+    backgroundColor: theme.colors.card,
     borderWidth: 1,
     borderColor: theme.colors.border,
     borderRadius: theme.radius.md,
@@ -193,7 +229,7 @@ const styles = StyleSheet.create({
   pill: {
     borderWidth: 1,
     borderColor: theme.colors.border,
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: theme.mode === "neumorph" ? theme.colors.card : "rgba(255,255,255,0.06)",
     borderRadius: theme.radius.pill,
     paddingHorizontal: 14,
     paddingVertical: 8,

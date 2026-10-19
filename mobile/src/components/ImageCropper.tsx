@@ -61,12 +61,17 @@ export function ImageCropper({
     (async () => {
       setImg(null);
       let uri = src;
-      // manipulateAsync needs a file/URL — a base64 data URL is written to cache.
-      if (src.startsWith("data:")) {
+      // manipulateAsync needs a local file — data URLs and server images are
+      // copied into the cache first.
+      if (src.startsWith("data:") || /^https?:/.test(src)) {
         try {
-          const b64 = src.slice(src.indexOf(",") + 1);
           const path = `${FileSystem.cacheDirectory}crop-src-${Date.now()}.jpg`;
-          await FileSystem.writeAsStringAsync(path, b64, { encoding: FileSystem.EncodingType.Base64 });
+          if (src.startsWith("data:")) {
+            const b64 = src.slice(src.indexOf(",") + 1);
+            await FileSystem.writeAsStringAsync(path, b64, { encoding: FileSystem.EncodingType.Base64 });
+          } else {
+            await FileSystem.downloadAsync(src, path);
+          }
           tempRef.current = path;
           uri = path;
         } catch {

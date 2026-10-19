@@ -3,6 +3,7 @@ import { LogOut, Settings } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Avatar } from "@/components/ui";
 import { Logo } from "@/components/Logo";
+import { ImageViewer } from "@/components/Modal";
 import { SettingsModal } from "@/components/SettingsModal";
 import { useAuth } from "@/state/auth";
 import { useToast } from "@/state/toast";
@@ -12,10 +13,11 @@ export function AppHeader({ children }: { children?: React.ReactNode }) {
   const { success } = useToast();
   const navigate = useNavigate();
   const [showSettings, setShowSettings] = useState(false);
+  const [showPhoto, setShowPhoto] = useState(false);
 
   return (
     <>
-      <header className="pt-safe sticky top-0 z-30 border-b border-white/10 bg-[#0a0807]/70 backdrop-blur-xl">
+      <header className="pt-safe sticky top-0 z-30 border-b border-white/10 bg-app/70 backdrop-blur-xl">
         <div className="mx-auto flex max-w-4xl items-center justify-between gap-3 px-4 py-3">
           <button onClick={() => navigate("/")} className="flex items-center">
             <Logo size={30} textClassName="text-2xl" />
@@ -24,9 +26,9 @@ export function AppHeader({ children }: { children?: React.ReactNode }) {
             {children}
             {user && (
               <button
-                onClick={() => setShowSettings(true)}
-                className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 py-1 pl-1 pr-3 transition hover:bg-white/10"
-                title="Settings"
+                onClick={() => setShowPhoto(true)}
+                className="flex cursor-zoom-in items-center gap-2 rounded-full border border-white/10 bg-white/5 py-1 pl-1 pr-3 transition hover:bg-white/10"
+                title="View profile photo"
               >
                 <Avatar name={user.name} src={user.avatar} size={28} />
                 <span className="hidden text-sm font-semibold text-white/80 sm:block">
@@ -56,6 +58,21 @@ export function AppHeader({ children }: { children?: React.ReactNode }) {
           otherwise make this fixed-position modal position relative to the
           header box (hiding its top behind the bar). */}
       <SettingsModal open={showSettings} onClose={() => setShowSettings(false)} />
+      {user && (
+        <ImageViewer
+          open={showPhoto}
+          onClose={() => setShowPhoto(false)}
+          src={user.avatar}
+          alt={user.name}
+          fallback={
+            <Avatar
+              name={user.name}
+              size={0}
+              className="!h-full !w-full !rounded-none !text-[clamp(4rem,22vw,10rem)] ring-0"
+            />
+          }
+        />
+      )}
     </>
   );
 }

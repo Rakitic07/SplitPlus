@@ -154,7 +154,7 @@ export function TrendArea({
   const data = [...map.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([date, value]) => ({
-      date: new Date(date).toLocaleDateString(undefined, { day: "numeric", month: "short" }),
+      date: new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { day: "numeric", month: "short" }),
       value: Number(value.toFixed(2)),
     }));
   if (data.length === 0) return <NoData />;

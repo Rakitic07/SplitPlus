@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
-import { Equal, ImagePlus, Percent, ScrollText, SlidersHorizontal, Trash2 } from "lucide-react";
+import { Camera, Equal, ImagePlus, Percent, ScrollText, SlidersHorizontal, Trash2 } from "lucide-react";
 import { Modal } from "@/components/Modal";
+import { CameraCapture } from "@/components/CameraCapture";
 import { ImageLightbox } from "@/components/ImageLightbox";
 import { Avatar, Button, Field, Input } from "@/components/ui";
 import { DatePicker } from "@/components/DatePicker";
@@ -38,6 +39,8 @@ export function ExpenseFormModal({
 }) {
   const { success, error } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const [showCamera, setShowCamera] = useState(false);
 
   const initShares = (): ShareState => {
     const st: ShareState = {};
@@ -48,7 +51,7 @@ export function ExpenseFormModal({
       if (editing && share) {
         if (editing.splitMode === "exact") value = String(share.amount);
         else if (editing.splitMode === "percent")
-          value = String(Math.round((share.amount / editing.amount) * 100));
+          value = String(Math.round((share.amount / editing.amount) * 10000) / 100);
         else if (editing.splitMode === "shares") value = String(share.amount);
       }
       st[m.id] = { included, value };
@@ -101,14 +104,25 @@ export function ExpenseFormModal({
     return `${formatMoney(group.currency, amt / includedCount)} each`;
   }
 
-  async function pickImage(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  async function applyImageFile(file: File) {
     try {
       setThumbnail(await fileToThumbnail(file, 1000, 0.7));
     } catch {
       error("Couldn't process that image");
     }
+  }
+
+  function pickImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (file) applyImageFile(file);
+  }
+
+  // Touch devices honour `capture` and open the native camera directly;
+  // desktops ignore it, so they get the in-page webcam capture instead.
+  function openCamera() {
+    if (window.matchMedia("(pointer: coarse)").matches) cameraRef.current?.click();
+    else setShowCamera(true);
   }
 
   async function save() {
@@ -186,7 +200,7 @@ export function ExpenseFormModal({
           </Field>
         </div>
 
-        <Field label="Category">
+        <Field label="Category" group>
           <div className="flex flex-wrap gap-2">
             {CATEGORIES.map((c) => (
               <button
@@ -207,7 +221,7 @@ export function ExpenseFormModal({
         </Field>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="Paid by">
+          <Field label="Paid by" group>
             <div className="flex flex-wrap gap-2">
               {group.members.map((m) => (
                 <button
@@ -224,7 +238,7 @@ export function ExpenseFormModal({
               ))}
             </div>
           </Field>
-          <Field label="Date">
+          <Field label="Date" group>
             <DatePicker value={date} onChange={setDate} />
           </Field>
         </div>
@@ -261,8 +275,15 @@ export function ExpenseFormModal({
               const st = shares[m.id] ?? { included: false, value: "" };
               const owed = computed.get(m.id) ?? 0;
               return (
-                <div key={m.id} className="flex items-center gap-3 px-4 py-2.5">
-                  <button type="button" onClick={() => toggle(m.id)}>
+                <div key={m.id} className="flex items-center gap-2 px-3 py-2.5 sm:gap-3 sm:px-4">
+                  <button
+                    type="button"
+                    onClick={() => toggle(m.id)}
+                    role="checkbox"
+                    aria-checked={st.included}
+                    aria-label={`Include ${m.id === group.myUserId ? "you" : m.name}`}
+                    className="-m-2 shrink-0 p-2"
+                  >
                     <div
                       className={`flex h-6 w-6 items-center justify-center rounded-md border transition ${
                         st.included ? "border-orange-400 bg-orange-500/40" : "border-white/20"
@@ -271,13 +292,13 @@ export function ExpenseFormModal({
                       {st.included && <span className="text-xs">✓</span>}
                     </div>
                   </button>
-                  <Avatar name={m.name} src={m.avatar} size={30} />
-                  <span className="flex-1 truncate text-sm text-white/85">
+                  <Avatar name={m.name} src={m.avatar} size={30} className="hidden shrink-0 min-[360px]:flex" />
+                  <span className="min-w-0 flex-1 truncate text-sm text-white/85">
                     {m.id === group.myUserId ? "You" : m.name}
                   </span>
 
                   {st.included && mode !== "equal" && (
-                    <div className="flex items-center gap-1">
+                    <div className="flex shrink-0 items-center gap-1">
                       {mode === "percent" && <span className="text-xs text-white/40">%</span>}
                       <input
                         type="number"
@@ -285,13 +306,14 @@ export function ExpenseFormModal({
                         value={st.value}
                         onChange={(e) => setValue(m.id, e.target.value)}
                         placeholder={mode === "shares" ? "1" : "0"}
-                        className="w-20 rounded-lg border border-white/15 bg-white/5 px-2 py-1 text-right text-sm text-white outline-none focus:border-white/40"
+                        aria-label={`${mode === "percent" ? "Percent" : mode === "shares" ? "Shares" : "Amount"} for ${m.name}`}
+                        className="w-16 rounded-lg border border-white/15 bg-white/5 px-2 py-1 text-right text-base text-white outline-none focus:border-white/40 sm:w-20 sm:text-sm"
                       />
                     </div>
                   )}
                   <span
-                    className={`w-20 text-right text-sm font-semibold ${
-                      st.included ? "text-white" : "text-white/25"
+                    className={`min-w-[4.5rem] shrink-0 whitespace-nowrap text-right text-sm font-semibold tabular-nums ${
+                      st.included ? "text-white" : "text-white/40"
                     }`}
                   >
                     {st.included ? formatMoney(group.currency, owed) : "—"}
@@ -328,24 +350,43 @@ export function ExpenseFormModal({
               <button
                 type="button"
                 onClick={() => setThumbnail(null)}
+                aria-label="Remove receipt"
                 className="absolute -right-2 -top-2 rounded-full bg-rose-500 p-1.5 text-white shadow"
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
             </div>
           ) : (
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              className="flex h-20 w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-white/20 bg-white/5 text-sm text-white/50 transition hover:bg-white/10"
-            >
-              <ImagePlus className="h-5 w-5" /> Attach a receipt
-            </button>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="flex h-20 items-center justify-center gap-2 rounded-2xl border border-dashed border-white/20 bg-white/5 text-sm text-white/50 transition hover:bg-white/10"
+              >
+                <ImagePlus className="h-5 w-5" /> Attach a file
+              </button>
+              <button
+                type="button"
+                onClick={openCamera}
+                className="flex h-20 items-center justify-center gap-2 rounded-2xl border border-dashed border-white/20 bg-white/5 text-sm text-white/50 transition hover:bg-white/10"
+              >
+                <Camera className="h-5 w-5" /> Take photo
+              </button>
+            </div>
           )}
           <input ref={fileRef} type="file" accept="image/*" hidden onChange={pickImage} />
+          <input
+            ref={cameraRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            hidden
+            onChange={pickImage}
+          />
         </div>
       </div>
       {preview && <ImageLightbox src={thumbnail} alt="Receipt" onClose={() => setPreview(false)} />}
+      <CameraCapture open={showCamera} onClose={() => setShowCamera(false)} onCapture={applyImageFile} />
     </Modal>
   );
 }

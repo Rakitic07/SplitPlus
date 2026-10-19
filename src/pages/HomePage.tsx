@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Bell, Check, Download, Loader2, Mail, Plus, Search, Users, X } from "lucide-react";
+import { Bell, Check, Download, Loader2, Mail, Plus, RotateCw, Search, Users, WifiOff, X } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 import { Avatar, Button, Card, EmptyState } from "@/components/ui";
 import { ShimmerText, SkeletonCard } from "@/components/Shimmer";
@@ -61,6 +61,7 @@ export function HomePage() {
   const [invites, setInvites] = useState<PendingInvite[]>([]);
   const [incoming, setIncoming] = useState<IncomingSettlement[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [showExport, setShowExport] = useState(false);
 
@@ -95,8 +96,9 @@ export function HomePage() {
       setGroups(d.groups);
       setInvites(d.invites);
       setIncoming(d.settlements as IncomingSettlement[]);
+      setLoadFailed(false);
     } catch {
-      /* stay silent on the dashboard */
+      setLoadFailed(true);
     } finally {
       setLoading(false);
     }
@@ -176,6 +178,8 @@ export function HomePage() {
           <p className="mt-1 text-sm text-white/55">
             {loading ? (
               <ShimmerText>Loading your groups…</ShimmerText>
+            ) : loadFailed && groups.length === 0 ? (
+              "We couldn't reach Split+ just now."
             ) : groups.length === 0 ? (
               "Create your first group to start splitting."
             ) : (
@@ -203,6 +207,7 @@ export function HomePage() {
               <button
                 type="button"
                 onClick={() => setSearchQ("")}
+                aria-label="Clear search"
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 transition hover:text-white/80"
               >
                 <X className="h-4 w-4" />
@@ -287,7 +292,7 @@ export function HomePage() {
           <div className="mt-5 space-y-2">
             {invites.map((inv) => (
               <Card key={inv.id} className="flex items-center gap-3 p-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 text-xl">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-xl">
                   {inv.group.emoji ?? "👥"}
                 </div>
                 <div className="min-w-0 flex-1">
@@ -301,13 +306,17 @@ export function HomePage() {
                 </div>
                 <button
                   onClick={() => respondInvite(inv, "accept")}
-                  className="rounded-full bg-emerald-500/20 p-2 text-emerald-300 transition hover:bg-emerald-500/30"
+                  aria-label="Accept invite"
+                  title="Accept invite"
+                  className="shrink-0 rounded-full bg-emerald-500/20 p-2.5 text-emerald-300 transition hover:bg-emerald-500/30"
                 >
                   <Check className="h-4 w-4" />
                 </button>
                 <button
                   onClick={() => respondInvite(inv, "decline")}
-                  className="rounded-full bg-white/10 p-2 text-white/60 transition hover:bg-white/20"
+                  aria-label="Decline invite"
+                  title="Decline invite"
+                  className="shrink-0 rounded-full bg-white/10 p-2.5 text-white/60 transition hover:bg-white/20"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -328,13 +337,17 @@ export function HomePage() {
                 </div>
                 <button
                   onClick={() => respondSettlement(s, "approve")}
-                  className="rounded-full bg-emerald-500/20 p-2 text-emerald-300 transition hover:bg-emerald-500/30"
+                  aria-label="Confirm payment"
+                  title="Confirm payment"
+                  className="shrink-0 rounded-full bg-emerald-500/20 p-2.5 text-emerald-300 transition hover:bg-emerald-500/30"
                 >
                   <Check className="h-4 w-4" />
                 </button>
                 <button
                   onClick={() => respondSettlement(s, "decline")}
-                  className="rounded-full bg-white/10 p-2 text-white/60 transition hover:bg-white/20"
+                  aria-label="Reject payment"
+                  title="Reject payment"
+                  className="shrink-0 rounded-full bg-white/10 p-2.5 text-white/60 transition hover:bg-white/20"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -366,6 +379,25 @@ export function HomePage() {
                 <SkeletonCard key={i} />
               ))}
             </div>
+          ) : loadFailed && groups.length === 0 ? (
+            <Card>
+              <EmptyState
+                icon={<WifiOff className="h-8 w-8" />}
+                title="Couldn't load your groups"
+                subtitle="Your groups are safe. Check your connection and try again."
+                action={
+                  <Button
+                    className="mt-2"
+                    onClick={() => {
+                      setLoading(true);
+                      load();
+                    }}
+                  >
+                    <RotateCw className="h-4 w-4" /> Retry
+                  </Button>
+                }
+              />
+            </Card>
           ) : groups.length === 0 ? (
             <Card>
               <EmptyState
@@ -395,7 +427,7 @@ export function HomePage() {
                           <img src={g.thumbnail} alt="" className="h-full w-full object-cover" />
                         ) : (
                           <div
-                            className="flex h-full w-full items-center justify-center text-5xl"
+                            className="cover-fallback flex h-full w-full items-center justify-center text-5xl"
                             style={{ background: "linear-gradient(135deg,#3a2a12,#402a1a)" }}
                           >
                             {g.emoji ?? "👥"}
@@ -442,7 +474,7 @@ export function HomePage() {
       {/* FAB */}
       <button
         onClick={() => setShowCreate(true)}
-        className="glass-btn-primary fixed bottom-6 right-6 z-30 h-14 w-14 !rounded-full !p-0 shadow-glow"
+        className="glass-btn-primary fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] right-6 z-30 h-14 w-14 !rounded-full !p-0 shadow-glow"
         aria-label="New group"
       >
         <Plus className="h-6 w-6" />

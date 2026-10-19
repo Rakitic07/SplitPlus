@@ -15,14 +15,15 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
 import { Avatar, Button, Card, Input, Label } from "../components/ui";
+import { DateField } from "../components/DateField";
 import { ImagePreview } from "../components/ImagePreview";
 import { api, ApiError, type ShareInputDto } from "../lib/api";
 import { CATEGORIES } from "../shared/categories";
 import { formatMoney } from "../shared/currency";
 import { computeShares, validateSplit, type SplitMode } from "../shared/split";
 import { todayISO } from "../lib/utils";
-import { useToast } from "../state/toast";
-import { theme } from "../theme";
+import { ToastView, useToast } from "../state/toast";
+import { theme, raised } from "../theme";
 import type { RootStackParamList } from "../navigation";
 import type { Expense, GroupDetail } from "../shared/types";
 
@@ -83,7 +84,8 @@ export function ExpenseFormScreen() {
             let value = "";
             if (share) {
               if (exp.splitMode === "exact") value = String(share.amount);
-              else if (exp.splitMode === "percent") value = String(Math.round((share.amount / exp.amount) * 100));
+              else if (exp.splitMode === "percent")
+                value = String(Math.round((share.amount / exp.amount) * 10000) / 100);
               else if (exp.splitMode === "shares") value = String(share.amount);
             }
             st[m.id] = { included: !!share, value };
@@ -137,7 +139,19 @@ export function ExpenseFormScreen() {
     if (!res.canceled && res.assets[0]?.base64) setThumb(`data:image/jpeg;base64,${res.assets[0].base64}`);
   }
 
+  async function snapReceipt() {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) return error("Allow camera access in Settings to take a photo");
+    const res = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.6,
+      base64: true,
+    });
+    if (!res.canceled && res.assets[0]?.base64) setThumb(`data:image/jpeg;base64,${res.assets[0].base64}`);
+  }
+
   async function save() {
+    if (!group) return;
     if (!title.trim()) return error("Add a title");
     if (amt <= 0) return error("Enter a valid amount");
     if (includedCount === 0) return error("Select at least one participant");
@@ -192,15 +206,18 @@ export function ExpenseFormScreen() {
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
-      <View style={[styles.head, { paddingTop: insets.top + 8 }]}>
-        <Pressable onPress={() => nav.goBack()}>
+      <View style={[styles.head, { paddingTop: Platform.OS === "ios" ? 16 : insets.top + 8 }]}>
+        <Pressable onPress={() => nav.goBack()} hitSlop={10} accessibilityRole="button">
           <Text style={{ color: theme.colors.textDim, fontSize: 16 }}>Cancel</Text>
         </Pressable>
         <Text style={styles.headTitle}>{editing ? "Edit expense" : "Add expense"}</Text>
         <View style={{ width: 50 }} />
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40, gap: 16 }} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 40, gap: 16 }}
+        keyboardShouldPersistTaps="handled"
+      >
         <View>
           <Label>What was it for?</Label>
           <Input value={title} onChangeText={setTitle} placeholder="Dinner at Olive" />
@@ -248,6 +265,11 @@ export function ExpenseFormScreen() {
         )}
 
         <View>
+          <Label>Date</Label>
+          <DateField value={date} onChange={setDate} />
+        </View>
+
+        <View>
           <Label>How to split</Label>
           <View style={styles.modeRow}>
             {MODES.map((m) => (
@@ -277,11 +299,20 @@ export function ExpenseFormScreen() {
               const owed = computed.get(m.id) ?? 0;
               return (
                 <View key={m.id} style={styles.partRow}>
-                  <Pressable onPress={() => toggle(m.id)} style={[styles.check, st.included && styles.checkOn]}>
+                  <Pressable
+                    onPress={() => toggle(m.id)}
+                    style={[styles.check, st.included && styles.checkOn]}
+                    hitSlop={10}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: st.included }}
+                    accessibilityLabel={`Include ${m.id === group.myUserId ? "you" : m.name}`}
+                  >
                     {st.included && <Text style={{ color: "#fff", fontSize: 12 }}>✓</Text>}
                   </Pressable>
                   <Avatar name={m.name} uri={m.avatar} size={28} />
-                  <Text style={{ color: "#fff", flex: 1 }}>{m.id === group.myUserId ? "You" : m.name}</Text>
+                  <Text style={{ color: "#fff", flex: 1, minWidth: 0 }} numberOfLines={1}>
+                    {m.id === group.myUserId ? "You" : m.name}
+                  </Text>
                   {st.included && mode !== "equal" && (
                     <Input
                       value={st.value}
@@ -291,7 +322,10 @@ export function ExpenseFormScreen() {
                       style={styles.valInput}
                     />
                   )}
-                  <Text style={{ color: st.included ? "#fff" : theme.colors.textFaint, fontWeight: "700", width: 74, textAlign: "right" }}>
+                  <Text
+                    numberOfLines={1}
+                    style={{ color: st.included ? "#fff" : theme.colors.textFaint, fontWeight: "700", minWidth: 74, textAlign: "right", fontVariant: ["tabular-nums"] }}
+                  >
                     {st.included ? formatMoney(currency, owed) : "—"}
                   </Text>
                 </View>
@@ -321,18 +355,34 @@ export function ExpenseFormScreen() {
                   <Text style={{ color: "#fff", fontSize: 12, fontWeight: "700" }}>Tap to preview</Text>
                 </View>
               </Pressable>
-              <Pressable onPress={() => setThumb(null)} style={styles.removeImg}>
+              <Pressable
+                onPress={() => setThumb(null)}
+                style={styles.removeImg}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="Remove receipt"
+              >
                 <Text style={{ color: "#fff" }}>✕</Text>
               </Pressable>
             </View>
           ) : (
-            <Pressable onPress={pickReceipt} style={styles.attach}>
-              <Text style={{ color: theme.colors.textFaint }}>＋ Attach a receipt</Text>
-            </Pressable>
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <Pressable onPress={pickReceipt} style={[styles.attach, { flex: 1 }]}>
+                <Text style={{ color: theme.colors.textFaint }}>🖼  Attach a file</Text>
+              </Pressable>
+              <Pressable onPress={snapReceipt} style={[styles.attach, { flex: 1 }]}>
+                <Text style={{ color: theme.colors.textFaint }}>📷  Take photo</Text>
+              </Pressable>
+            </View>
           )}
         </View>
 
-        <Button title={editing ? "Save changes" : "Add expense"} onPress={save} loading={busy} />
+        <Button
+          title={!group ? "Loading…" : editing ? "Save changes" : "Add expense"}
+          onPress={save}
+          loading={busy}
+          disabled={!group}
+        />
 
         {editing && (
           <Pressable onPress={confirmDelete} style={{ alignSelf: "center", paddingVertical: 8 }}>
@@ -342,6 +392,7 @@ export function ExpenseFormScreen() {
       </ScrollView>
 
       <ImagePreview visible={preview} src={thumb} onClose={() => setPreview(false)} />
+      <ToastView iosModalScreen />
     </KeyboardAvoidingView>
   );
 }
@@ -352,10 +403,10 @@ const styles = StyleSheet.create({
   wrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7 },
   payChip: { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
-  payChipActive: { borderColor: "rgba(255,255,255,0.5)", backgroundColor: "rgba(255,255,255,0.15)" },
+  payChipActive: { borderColor: "rgba(255,255,255,0.5)", ...raised("rgba(255,255,255,0.15)") },
   modeRow: { flexDirection: "row", gap: 8 },
   mode: { flex: 1, alignItems: "center", paddingVertical: 12, borderRadius: 16, borderWidth: 1, borderColor: theme.colors.border },
-  modeActive: { backgroundColor: "rgba(255,255,255,0.15)", borderColor: "rgba(255,255,255,0.5)" },
+  modeActive: { ...raised("rgba(255,255,255,0.15)"), borderColor: "rgba(255,255,255,0.5)" },
   partHead: { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 10, paddingVertical: 8 },
   partHeadTxt: { color: theme.colors.textFaint, fontSize: 12, textTransform: "uppercase", letterSpacing: 0.5 },
   partRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 10, paddingVertical: 8 },
@@ -363,7 +414,7 @@ const styles = StyleSheet.create({
   checkOn: { backgroundColor: "rgba(255,138,61,0.5)", borderColor: theme.colors.primary },
   valInput: { width: 74, paddingVertical: 6, paddingHorizontal: 8, textAlign: "right" },
   warn: { backgroundColor: "rgba(255,212,59,0.1)", borderColor: "rgba(255,212,59,0.3)", borderWidth: 1, borderRadius: 12, padding: 10 },
-  attach: { height: 72, borderRadius: 16, borderWidth: 1, borderStyle: "dashed", borderColor: theme.colors.border, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.05)" },
+  attach: { height: 72, borderRadius: 16, borderWidth: 1, borderStyle: "dashed", borderColor: theme.colors.border, alignItems: "center", justifyContent: "center", ...raised("rgba(255,255,255,0.05)") },
   removeImg: { position: "absolute", top: -8, right: -8, backgroundColor: theme.colors.red, width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" },
   tapHint: { position: "absolute", bottom: 8, right: 8, backgroundColor: "rgba(0,0,0,0.55)", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
 });

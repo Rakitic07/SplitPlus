@@ -31,8 +31,8 @@ export function AuthPage({ notice }: { notice?: string } = {}) {
     setBusy(true);
     try {
       if (mode === "login") {
-        await login(name, passphrase);
-        success(`Welcome back, ${name}!`);
+        const u = await login(name, passphrase);
+        success(`Welcome back, ${u.name}!`);
       } else {
         const { user, recoveryCode } = await register(name, passphrase);
         setPending({ user, recoveryCode });
@@ -117,12 +117,16 @@ export function AuthPage({ notice }: { notice?: string } = {}) {
           </div>
 
           <form onSubmit={submit} className="space-y-4">
-            <Field label="Your name">
+            <Field
+              label={mode === "login" ? "Your name or email" : "Your name"}
+              hint={mode === "login" ? "Email works only if you've added it in Settings." : undefined}
+            >
               <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Raktim"
-                autoCapitalize="words"
+                placeholder={mode === "login" ? "e.g. Raktim or you@example.com" : "e.g. Raktim"}
+                autoCapitalize={mode === "login" ? "none" : "words"}
+                autoComplete="username"
                 required
               />
             </Field>
@@ -159,7 +163,8 @@ export function AuthPage({ notice }: { notice?: string } = {}) {
         </Card>
 
         <p className="mt-5 text-center text-xs text-white/35">
-          No email needed. Your name + passphrase is your account — invite friends by their name.
+          No email needed. Your name + passphrase is your account — add a recovery email in Settings
+          if you like.
         </p>
 
         <div className="mt-4 flex items-center justify-center gap-4">

@@ -14,10 +14,11 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
-import { Avatar, Button, Card, Empty, Input, Label, SectionTitle } from "../components/ui";
+import { Avatar, Button, Card, Empty, Input, Label, SectionTitle, SheetRoot } from "../components/ui";
 import { AppFooter } from "../components/AppFooter";
 import { ExportSheet } from "../components/ExportSheet";
 import { SettingsSheet } from "../components/SettingsSheet";
+import { ImageViewer } from "../components/ImageViewer";
 import { ShimmerText, ShimmerWordmark, SkeletonRows } from "../components/Shimmer";
 import { api, ApiError, type SearchExpense } from "../lib/api";
 import { storage } from "../lib/storage";
@@ -25,7 +26,7 @@ import { formatMoney, CURRENCIES } from "../shared/currency";
 import { GROUP_EMOJIS } from "../shared/categories";
 import { useAuth } from "../state/auth";
 import { useToast } from "../state/toast";
-import { theme } from "../theme";
+import { theme, raised } from "../theme";
 import type { RootStackParamList } from "../navigation";
 import type { GroupSummary, PendingInvite, Settlement } from "../shared/types";
 
@@ -48,6 +49,7 @@ export function HomeScreen() {
   const [showCreate, setShowCreate] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showPhoto, setShowPhoto] = useState(false);
   const [showJoin, setShowJoin] = useState(false);
 
   // Global, cross-group expense search.
@@ -142,13 +144,26 @@ export function HomeScreen() {
     <View style={{ flex: 1 }}>
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <ShimmerWordmark text="Split+" textStyle={styles.brand} />
-        <Pressable
-          onPress={() => setShowSettings(true)}
-          style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-        >
-          {user && <Avatar name={user.name} uri={user.avatar} size={32} />}
-          <Text style={{ color: theme.colors.textFaint, fontSize: 18, marginTop: -2 }}>⚙︎</Text>
-        </Pressable>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+          {user && (
+            <Pressable
+              onPress={() => setShowPhoto(true)}
+              hitSlop={8}
+              accessibilityRole="imagebutton"
+              accessibilityLabel="View profile photo"
+            >
+              <Avatar name={user.name} uri={user.avatar} size={32} />
+            </Pressable>
+          )}
+          <Pressable
+            onPress={() => setShowSettings(true)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Settings"
+          >
+            <Text style={{ color: theme.colors.textFaint, fontSize: 18, marginTop: -2 }}>⚙︎</Text>
+          </Pressable>
+        </View>
       </View>
 
       <ScrollView
@@ -244,10 +259,22 @@ export function HomeScreen() {
                   </Text>
                   <Text style={styles.inboxSub}>Group invite</Text>
                 </View>
-                <Pressable style={[styles.iconBtn, styles.approve]} onPress={() => respondInvite(inv, "accept")}>
+                <Pressable
+                  style={[styles.iconBtn, styles.approve]}
+                  onPress={() => respondInvite(inv, "accept")}
+                  hitSlop={6}
+                  accessibilityRole="button"
+                  accessibilityLabel="Accept invite"
+                >
                   <Text style={styles.iconTxt}>✓</Text>
                 </Pressable>
-                <Pressable style={styles.iconBtn} onPress={() => respondInvite(inv, "decline")}>
+                <Pressable
+                  style={styles.iconBtn}
+                  onPress={() => respondInvite(inv, "decline")}
+                  hitSlop={6}
+                  accessibilityRole="button"
+                  accessibilityLabel="Decline invite"
+                >
                   <Text style={styles.iconTxt}>✕</Text>
                 </Pressable>
               </Card>
@@ -263,10 +290,22 @@ export function HomeScreen() {
                     {s.group.emoji} {s.group.name} · confirm receipt
                   </Text>
                 </View>
-                <Pressable style={[styles.iconBtn, styles.approve]} onPress={() => respondSettlement(s, "approve")}>
+                <Pressable
+                  style={[styles.iconBtn, styles.approve]}
+                  onPress={() => respondSettlement(s, "approve")}
+                  hitSlop={6}
+                  accessibilityRole="button"
+                  accessibilityLabel="Confirm payment"
+                >
                   <Text style={styles.iconTxt}>✓</Text>
                 </Pressable>
-                <Pressable style={styles.iconBtn} onPress={() => respondSettlement(s, "decline")}>
+                <Pressable
+                  style={styles.iconBtn}
+                  onPress={() => respondSettlement(s, "decline")}
+                  hitSlop={6}
+                  accessibilityRole="button"
+                  accessibilityLabel="Reject payment"
+                >
                   <Text style={styles.iconTxt}>✕</Text>
                 </Pressable>
               </Card>
@@ -356,6 +395,14 @@ export function HomeScreen() {
       />
       <ExportSheet visible={showExport} onClose={() => setShowExport(false)} scope="overall" />
       <SettingsSheet visible={showSettings} onClose={() => setShowSettings(false)} />
+      {user && (
+        <ImageViewer
+          visible={showPhoto}
+          onClose={() => setShowPhoto(false)}
+          uri={user.avatar}
+          name={user.name}
+        />
+      )}
       <JoinByLinkModal
         visible={showJoin}
         onClose={() => setShowJoin(false)}
@@ -431,7 +478,7 @@ function JoinByLinkModal({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.modalWrap}>
+      <SheetRoot style={styles.modalWrap}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={[styles.sheet, { paddingBottom: insets.bottom + 20 }]}>
           <Text style={styles.sheetTitle}>Join with a link</Text>
@@ -454,7 +501,7 @@ function JoinByLinkModal({
           )}
           <Button title="Join group" onPress={join} loading={busy} style={{ marginTop: 20 }} />
         </View>
-      </View>
+      </SheetRoot>
     </Modal>
   );
 }
@@ -469,12 +516,21 @@ function CreateGroupModal({
   onCreated: (g: GroupSummary) => void;
 }) {
   const { success, error } = useToast();
+  const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const [name, setName] = useState("");
   const [emoji, setEmoji] = useState(GROUP_EMOJIS[0]);
-  const [currency, setCurrency] = useState("INR");
+  const [currency, setCurrency] = useState(user?.defaultCurrency ?? "INR");
   const [thumb, setThumb] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!visible) return;
+    setName("");
+    setEmoji(GROUP_EMOJIS[0]);
+    setCurrency(user?.defaultCurrency ?? "INR");
+    setThumb(null);
+  }, [visible, user?.defaultCurrency]);
 
   async function pick() {
     const res = await ImagePicker.launchImageLibraryAsync({
@@ -508,7 +564,7 @@ function CreateGroupModal({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.modalWrap}>
+      <SheetRoot style={styles.modalWrap}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={[styles.sheet, { paddingBottom: insets.bottom + 20 }]}>
           <Text style={styles.sheetTitle}>New group</Text>
@@ -556,7 +612,7 @@ function CreateGroupModal({
 
           <Button title="Create group" onPress={create} loading={busy} style={{ marginTop: 20 }} />
         </View>
-      </View>
+      </SheetRoot>
     </Modal>
   );
 }
@@ -570,21 +626,21 @@ const styles = StyleSheet.create({
   inboxRow: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12 },
   inboxTitle: { color: "#fff", fontWeight: "700", fontSize: 14 },
   inboxSub: { color: theme.colors.textFaint, fontSize: 12, marginTop: 2 },
-  iconBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: "rgba(255,255,255,0.1)", alignItems: "center", justifyContent: "center" },
+  iconBtn: { width: 34, height: 34, borderRadius: 17, ...raised("rgba(255,255,255,0.1)"), alignItems: "center", justifyContent: "center" },
   approve: { backgroundColor: "rgba(56,217,169,0.25)" },
   iconTxt: { color: "#fff", fontWeight: "800" },
   coverFallback: { flex: 1, alignItems: "center", justifyContent: "center" },
   groupName: { color: "#fff", fontWeight: "800", fontSize: 17 },
   groupMeta: { color: theme.colors.textFaint, fontSize: 12, marginTop: 3 },
   groupNet: { fontWeight: "800", marginTop: 8 },
-  exportBtn: { flexDirection: "row", alignItems: "center", borderRadius: 999, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: "rgba(255,255,255,0.06)", paddingHorizontal: 12, paddingVertical: 6, marginBottom: 10 },
+  exportBtn: { flexDirection: "row", alignItems: "center", borderRadius: 999, borderWidth: 1, borderColor: theme.colors.border, ...raised("rgba(255,255,255,0.06)"), paddingHorizontal: 12, paddingVertical: 6, marginBottom: 10 },
   exportTxt: { color: theme.colors.textDim, fontWeight: "700", fontSize: 12 },
   searchWrap: { flexDirection: "row", alignItems: "center" },
   searchIcon: { position: "absolute", left: 14, zIndex: 1, fontSize: 14 },
   searchInput: { flex: 1, paddingLeft: 40 },
   searchClear: { position: "absolute", right: 12 },
   searchInfo: { color: theme.colors.textFaint, textAlign: "center", paddingVertical: 14 },
-  joinLinkRow: { marginTop: 12, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.border, borderStyle: "dashed", backgroundColor: "rgba(255,255,255,0.04)", paddingVertical: 12, alignItems: "center" },
+  joinLinkRow: { marginTop: 12, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.border, borderStyle: "dashed", ...raised("rgba(255,255,255,0.04)"), paddingVertical: 12, alignItems: "center" },
   joinLinkTxt: { color: theme.colors.textDim, fontWeight: "700", fontSize: 13 },
   resultRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 8, paddingVertical: 10 },
   resultTitle: { color: "#fff", fontWeight: "700", fontSize: 15 },
@@ -607,7 +663,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     backgroundColor: "rgba(255,255,255,0.05)",
   },
-  emojiBtn: { width: 42, height: 42, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.06)", alignItems: "center", justifyContent: "center" },
+  emojiBtn: { width: 42, height: 42, borderRadius: 12, ...raised("rgba(255,255,255,0.06)"), alignItems: "center", justifyContent: "center" },
   emojiActive: { backgroundColor: "rgba(255,255,255,0.2)", borderWidth: 1, borderColor: "rgba(255,255,255,0.5)" },
-  curBtn: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.06)" },
+  curBtn: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, ...raised("rgba(255,255,255,0.06)") },
 });

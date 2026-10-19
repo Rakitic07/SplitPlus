@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
+import { imageUrl } from "../lib/images.js";
 import { ah, requireAuth, type AuthedRequest } from "../lib/http.js";
 
 // Mounted at /api.
@@ -50,7 +51,7 @@ searchRouter.get(
         category: true,
         amount: true,
         date: true,
-        paidBy: { select: { id: true, name: true, avatar: true } },
+        paidBy: { select: { id: true, name: true, avatarVer: true } },
         group: { select: { id: true, name: true, emoji: true, currency: true } },
       },
     });
@@ -62,7 +63,7 @@ searchRouter.get(
       category: e.category,
       amount: e.amount,
       date: e.date.toISOString(),
-      paidBy: { id: e.paidBy.id, name: e.paidBy.name, avatar: e.paidBy.avatar ?? null },
+      paidBy: { id: e.paidBy.id, name: e.paidBy.name, avatar: imageUrl("u", e.paidBy.id, e.paidBy.avatarVer) },
       group: {
         id: e.group.id,
         name: e.group.name,

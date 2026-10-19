@@ -160,7 +160,7 @@ export function EditGroupModal({
           />
         </Field>
 
-        <Field label="Pick an emoji">
+        <Field label="Pick an emoji" group>
           <div className="flex flex-wrap gap-2">
             {GROUP_EMOJIS.map((em) => (
               <button
@@ -184,7 +184,7 @@ export function EditGroupModal({
             className="glass-input appearance-none"
           >
             {CURRENCIES.map((c) => (
-              <option key={c.code} value={c.code} className="bg-[#1c1710]">
+              <option key={c.code} value={c.code} className="bg-panel">
                 {c.symbol} {c.code} — {c.label}
               </option>
             ))}

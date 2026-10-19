@@ -76,7 +76,6 @@ export const PasswordInput = forwardRef<
         onClick={() => setShow((s) => !s)}
         className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-white/50 transition hover:text-white"
         aria-label={show ? "Hide passphrase" : "Show passphrase"}
-        tabIndex={-1}
       >
         {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
       </button>
@@ -87,18 +86,27 @@ export const PasswordInput = forwardRef<
 export function Field({
   label,
   hint,
+  group,
   children,
 }: {
   label: string;
   hint?: string;
+  /** Set when the field holds buttons (pills, choices) rather than a single
+   *  input: a wrapping <label> would forward any click on it to the first button. */
+  group?: boolean;
   children: ReactNode;
 }) {
+  const Root = group ? "fieldset" : "label";
   return (
-    <label className="block">
-      <span className="mb-1.5 block text-sm font-semibold text-white/70">{label}</span>
+    <Root className="block min-w-0">
+      {group ? (
+        <legend className="mb-1.5 block text-sm font-semibold text-white/70">{label}</legend>
+      ) : (
+        <span className="mb-1.5 block text-sm font-semibold text-white/70">{label}</span>
+      )}
       {children}
-      {hint && <span className="mt-1 block text-xs text-white/40">{hint}</span>}
-    </label>
+      {hint && <span className="mt-1 block text-xs text-white/50">{hint}</span>}
+    </Root>
   );
 }
 
@@ -202,13 +210,13 @@ export function AvatarStack({
     <div className="flex items-center">
       {shown.map((p, i) => (
         <div key={i} style={{ marginLeft: i === 0 ? 0 : -size * 0.3 }}>
-          <Avatar name={p.name} src={p.avatar} size={size} className="ring-2 ring-[#0b0d1c]" />
+          <Avatar name={p.name} src={p.avatar} size={size} className="ring-2 ring-app" />
         </div>
       ))}
       {showOverflow && extra > 0 && (
         <div
           style={{ width: size, height: size, marginLeft: -size * 0.3, fontSize: size * 0.36 }}
-          className="flex items-center justify-center rounded-full bg-white/15 font-semibold text-white/80 ring-2 ring-[#0b0d1c]"
+          className="flex items-center justify-center rounded-full bg-white/15 font-semibold text-white/80 ring-2 ring-app"
         >
           +{extra}
         </div>

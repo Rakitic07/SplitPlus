@@ -18,10 +18,18 @@ model User {
   nameKey      String   @unique
   passHash     String
   recoveryHash String?
+  // Verified recovery email (lowercased); also usable as a login identifier.
+  email        String?  @unique
   avatar       String?
+  avatarVer    String?
+  sessionPolicy  String @default("6months")
+  sessionVersion Int    @default(0)
+  theme             String  @default("glass")
   defaultCurrency   String  @default("INR")
   reminderEnabled   Boolean @default(false)
   reminderFrequency String  @default("weekly")
+  ntfyTopic         String?
+  ntfyServer        String?
   createdAt    DateTime @default(now())
 
   memberships     Membership[]
@@ -35,6 +43,22 @@ model User {
   settlementsTo   Settlement[]   @relation("SettlementTo")
   resetRequests   ResetRequest[]
   nameChanges     NameChange[]
+  emailCodes      EmailCode[]
+}
+
+// Short-lived 6-digit email codes ("verify" a new email / "reset" passphrase).
+model EmailCode {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purpose   String
+  email     String
+  codeHash  String
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId, purpose])
 }
 
 // Audit trail of display-name changes (enforces a "twice per rolling 30 days"
@@ -54,6 +78,7 @@ model Group {
   id          String   @id @default(cuid())
   name        String
   thumbnail   String?
+  thumbVer    String?
   currency    String   @default("INR")
   emoji       String?
   // Opaque, unguessable capability token for the shareable "join link". Anyone

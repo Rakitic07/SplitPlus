@@ -31,7 +31,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Split+ needs access to your photos to attach receipts and group covers."
+          "photosPermission": "Split+ needs access to your photos to attach receipts and group covers.",
+          "cameraPermission": "Split+ uses the camera so you can snap a photo of a receipt."
         }
       ],
       "expo-asset"

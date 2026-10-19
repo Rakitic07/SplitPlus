@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
+import { imageUrl } from "../lib/images.js";
 import { inviteSchema, inviteActionSchema } from "../../shared/validation.js";
 import {
   ah,
@@ -13,10 +14,10 @@ import {
 // Mounted at /api.
 export const invitesRouter = Router();
 
-const publicUser = (u: { id: string; name: string; avatar?: string | null }) => ({
+const publicUser = (u: { id: string; name: string; avatarVer?: string | null }) => ({
   id: u.id,
   name: u.name,
-  avatar: u.avatar ?? null,
+  avatar: imageUrl("u", u.id, u.avatarVer),
 });
 
 // Pending invites addressed to a user (shared by GET /invites and /api/home).
@@ -26,15 +27,15 @@ export async function pendingInvitesFor(userId: string) {
     select: {
       id: true,
       createdAt: true,
-      group: { select: { id: true, name: true, emoji: true, thumbnail: true } },
-      invitedBy: { select: { id: true, name: true, avatar: true } },
+      group: { select: { id: true, name: true, emoji: true, thumbVer: true } },
+      invitedBy: { select: { id: true, name: true, avatarVer: true } },
     },
     orderBy: { createdAt: "desc" },
   });
   return invites.map((i) => ({
     id: i.id,
     createdAt: i.createdAt,
-    group: i.group,
+    group: { id: i.group.id, name: i.group.name, emoji: i.group.emoji, thumbnail: imageUrl("g", i.group.id, i.group.thumbVer) },
     invitedBy: publicUser(i.invitedBy),
   }));
 }
@@ -104,7 +105,7 @@ invitesRouter.get(
       select: {
         id: true,
         createdAt: true,
-        invitee: { select: { id: true, name: true, avatar: true } },
+        invitee: { select: { id: true, name: true, avatarVer: true } },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -136,7 +137,7 @@ invitesRouter.post(
 
     const invitee = await prisma.user.findUnique({
       where: { nameKey },
-      select: { id: true, name: true, avatar: true },
+      select: { id: true, name: true, avatarVer: true },
     });
     if (!invitee) {
       return res.status(404).json({

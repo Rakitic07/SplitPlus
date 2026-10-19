@@ -10,6 +10,9 @@ import { homeRouter } from "./routes/home.js";
 import { searchRouter } from "./routes/search.js";
 import { versionRouter } from "./routes/version.js";
 import { joinRouter } from "./routes/join.js";
+import { imgRouter } from "./routes/img.js";
+import { ntfyRouter } from "./routes/ntfy.js";
+import { imageOrigin } from "./lib/images.js";
 
 const app = express();
 
@@ -38,6 +41,9 @@ app.get("/api/health", async (_req, res) => {
   });
 });
 
+app.use("/api", imgRouter);
+app.use("/api", ntfyRouter);
+app.use("/api", imageOrigin);
 app.use("/api/auth", authRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api", homeRouter);

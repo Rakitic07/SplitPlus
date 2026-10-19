@@ -296,7 +296,7 @@ adminRouter.get(
       recentExpenses,
       recentUsers,
       topGroupSize,
-    ] = await prisma.$transaction([
+    ] = await Promise.all([
       prisma.user.count(),
       prisma.group.count(),
       prisma.expense.count(),
@@ -359,7 +359,7 @@ adminRouter.get(
     // Resolve names for top groups / payers.
     const gIds = groupSpendRows.map((r) => r.groupId);
     const pIds = payerRows.map((r) => r.paidById);
-    const [gMeta, pMeta] = await prisma.$transaction([
+    const [gMeta, pMeta] = await Promise.all([
       prisma.group.findMany({
         where: { id: { in: gIds } },
         select: { id: true, name: true, emoji: true, currency: true },
@@ -556,7 +556,7 @@ adminRouter.post(
       // Apply the passphrase the user proposed at request time.
       await prisma.user.update({
         where: { id: rr.userId },
-        data: { passHash: rr.proposedHash },
+        data: { passHash: rr.proposedHash, sessionVersion: { increment: 1 } },
       });
     }
 
@@ -592,7 +592,7 @@ adminRouter.get(
       select: {
         id: true,
         name: true,
-        avatar: true,
+        avatarVer: true,
         defaultCurrency: true,
         createdAt: true,
         _count: { select: { memberships: true, createdGroups: true, paidExpenses: true } },
@@ -602,7 +602,7 @@ adminRouter.get(
       users: users.map((u) => ({
         id: u.id,
         name: u.name,
-        hasAvatar: !!u.avatar,
+        hasAvatar: !!u.avatarVer,
         defaultCurrency: u.defaultCurrency,
         createdAt: u.createdAt.toISOString(),
         memberships: u._count.memberships,

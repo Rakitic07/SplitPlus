@@ -1,9 +1,14 @@
 import React from "react";
 import { StyleSheet, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { theme } from "../theme";
 
 // Deep radial-ish base with soft colour blobs, mirroring the web backdrop.
+// Neumorph is a single flat tone — depth comes from the surfaces instead.
 export function Background() {
+  if (theme.mode === "neumorph") {
+    return <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.colors.bg }]} pointerEvents="none" />;
+  }
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
       <LinearGradient colors={["#1c1508", "#0a0805", "#050403"]} style={StyleSheet.absoluteFill} />

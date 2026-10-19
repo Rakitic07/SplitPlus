@@ -12,11 +12,21 @@ export type ReminderFrequency = "daily" | "weekly" | "monthly";
 // The signed-in user, including their personal settings. Returned by
 // /auth/me, /auth/login, /auth/register and /auth/settings.
 export type SelfUser = PublicUser & {
+  // Verified recovery email (also usable to log in), if configured.
+  email?: string | null;
   defaultCurrency: string;
   reminderEnabled: boolean;
   reminderFrequency: ReminderFrequency;
+  // "6months" = signed out after 6 months of not using the app; "never" = stay signed in.
+  sessionPolicy?: SessionPolicy;
+  theme?: AppTheme;
+  // Push notifications via ntfy, if set up.
+  ntfy?: { topic: string; server: string } | null;
   createdAt?: string;
 };
+
+export type SessionPolicy = "6months" | "never";
+export type AppTheme = "glass" | "neumorph";
 
 export type Role = "owner" | "moderator" | "member";
 

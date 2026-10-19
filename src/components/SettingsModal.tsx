@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Bell, Check, ImagePlus, Pencil, Trash2 } from "lucide-react";
 import { Modal } from "@/components/Modal";
+import { NtfySettings } from "@/components/NtfySettings";
+import { PassphraseField } from "@/components/PassphraseField";
+import { RecoveryEmailField } from "@/components/RecoveryEmailField";
+import { SessionSettings } from "@/components/SessionSettings";
+import { ThemePicker } from "@/components/ThemePicker";
 import { Avatar, Button, Field, Input } from "@/components/ui";
 import { CURRENCIES } from "@shared/currency";
 import { api, ApiError, type NameChangeStatus } from "@/lib/api";
@@ -122,7 +127,7 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
             title="Change photo"
           >
             <Avatar name={user.name} src={avatar} size={72} />
-            <span className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-orange-500 text-white ring-2 ring-[#0a0807]">
+            <span className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-orange-500 text-white ring-2 ring-app">
               <ImagePlus className="h-3.5 w-3.5" />
             </span>
           </button>
@@ -153,6 +158,7 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
         {/* Display name (rate-limited) */}
         <Field
           label="Display name"
+          group={!editingName}
           hint={
             nameStatus
               ? nameStatus.remaining > 0
@@ -207,6 +213,12 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
           )}
         </Field>
 
+        <RecoveryEmailField open={open} />
+
+        <PassphraseField open={open} />
+
+        <ThemePicker />
+
         {/* Default currency */}
         <Field
           label="Default currency"
@@ -218,7 +230,7 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
             className="glass-input appearance-none"
           >
             {CURRENCIES.map((c) => (
-              <option key={c.code} value={c.code} className="bg-[#1c1710]">
+              <option key={c.code} value={c.code} className="bg-panel">
                 {c.symbol} {c.code} — {c.label}
               </option>
             ))}
@@ -276,6 +288,10 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
             </div>
           )}
         </div>
+
+        <NtfySettings open={open} />
+
+        <SessionSettings />
 
         <p className="text-center text-xs text-white/30">
           Member since{" "}

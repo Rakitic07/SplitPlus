@@ -18,9 +18,10 @@ import { useFocusEffect, useNavigation, useRoute, type RouteProp } from "@react-
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { Avatar, Button, Card, Empty, Input, Label, SectionTitle } from "../components/ui";
+import { Avatar, Button, Card, Empty, Input, Label, SectionTitle, SheetRoot } from "../components/ui";
 import { AppFooter } from "../components/AppFooter";
 import { ExportSheet } from "../components/ExportSheet";
+import { ExpenseFlowSheet } from "../components/ExpenseFlowSheet";
 import { MembersSheet } from "../components/MembersSheet";
 import { EditGroupSheet } from "../components/EditGroupSheet";
 import { ShimmerText, SkeletonRows } from "../components/Shimmer";
@@ -31,7 +32,7 @@ import { formatMoney } from "../shared/currency";
 import { categoryMeta } from "../shared/categories";
 import { fmtDay } from "../lib/utils";
 import { useToast } from "../state/toast";
-import { theme } from "../theme";
+import { theme, inset, raised } from "../theme";
 import type { RootStackParamList } from "../navigation";
 import type {
   Balance,
@@ -81,6 +82,7 @@ export function GroupScreen() {
   const [showExport, setShowExport] = useState(false);
   const [showMembers, setShowMembers] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
+  const [flowExpense, setFlowExpense] = useState<Expense | null>(null);
 
   // Horizontal slide + fade played whenever the active tab changes.
   const slide = useRef(new Animated.Value(0)).current;
@@ -239,21 +241,39 @@ export function GroupScreen() {
         )}
         <LinearGradient colors={["transparent", theme.colors.bg]} style={styles.coverFade} />
         <View style={[styles.coverTop, { top: insets.top + 6 }]}>
-          <Pressable style={styles.roundBtn} onPress={() => nav.goBack()}>
+          <Pressable
+            style={styles.roundBtn}
+            onPress={() => nav.goBack()}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Back to groups"
+          >
             <Text style={styles.roundTxt}>‹</Text>
           </Pressable>
           <View style={{ flexDirection: "row", gap: 8 }}>
+            <Pressable
+              style={styles.roundBtn}
+              onPress={() => setShowExport(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Export expenses"
+            >
+              <Text style={styles.headIcon}>⇩</Text>
+            </Pressable>
             {elevated && (
-              <Pressable style={styles.invite} onPress={() => setShowEdit(true)}>
-                <Text style={{ color: "#fff", fontWeight: "700" }}>✎ Edit</Text>
+              <Pressable
+                style={styles.roundBtn}
+                onPress={() => setShowEdit(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Edit group"
+              >
+                <Text style={styles.headIcon}>✎</Text>
               </Pressable>
             )}
-            <Pressable style={styles.invite} onPress={() => setShowExport(true)}>
-              <Text style={{ color: "#fff", fontWeight: "700" }}>⇩ Export</Text>
-            </Pressable>
-            <Pressable style={styles.invite} onPress={() => setShowInvite(true)}>
-              <Text style={{ color: "#fff", fontWeight: "700" }}>+ Invite</Text>
-            </Pressable>
+            {elevated && (
+              <Pressable style={styles.invite} onPress={() => setShowInvite(true)} accessibilityRole="button">
+                <Text style={{ color: "#fff", fontWeight: "700" }}>+ Invite</Text>
+              </Pressable>
+            )}
           </View>
         </View>
         <View style={styles.coverTitle}>
@@ -307,8 +327,19 @@ export function GroupScreen() {
         {/* Tabs */}
         <View style={styles.tabs}>
           {TAB_ORDER.map((t) => (
-            <Pressable key={t} onPress={() => selectTab(t)} style={[styles.tab, tab === t && styles.tabActive]}>
-              <Text numberOfLines={1} style={[styles.tabText, tab === t && { color: "#fff" }]}>
+            <Pressable
+              key={t}
+              onPress={() => selectTab(t)}
+              style={[styles.tab, tab === t && styles.tabActive]}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: tab === t }}
+            >
+              <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.75}
+                style={[styles.tabText, tab === t && { color: "#fff" }]}
+              >
                 {TAB_LABEL[t]}
               </Text>
             </Pressable>
@@ -335,6 +366,7 @@ export function GroupScreen() {
               myId={myId}
               loading={loading}
               onEdit={(id) => nav.navigate("ExpenseForm", { groupId, expenseId: id })}
+              onPlay={setFlowExpense}
             />
           ) : tab === "activity" ? (
             <ActivityView
@@ -434,6 +466,13 @@ export function GroupScreen() {
         expenses={expenses}
         myId={myId}
       />
+      <ExpenseFlowSheet
+        expense={flowExpense}
+        members={group?.members ?? []}
+        myId={myId}
+        currency={currency}
+        onClose={() => setFlowExpense(null)}
+      />
     </View>
   );
 }
@@ -502,12 +541,14 @@ function ExpensesView({
   myId,
   loading,
   onEdit,
+  onPlay,
 }: {
   expenses: Expense[];
   currency: string;
   myId: string;
   loading?: boolean;
   onEdit?: (expenseId: string) => void;
+  onPlay?: (expense: Expense) => void;
 }) {
   const [q, setQ] = useState("");
   const [page, setPage] = useState(0);
@@ -580,6 +621,15 @@ function ExpensesView({
                     </>
                   )}
                 </View>
+                <Pressable
+                  onPress={() => onPlay?.(e)}
+                  hitSlop={6}
+                  style={styles.playBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Play money flow for ${e.title}`}
+                >
+                  <Text style={styles.playIcon}>▶</Text>
+                </Pressable>
               </Pressable>
             );
           })}
@@ -622,12 +672,12 @@ function BalancesView({
             {debts.map((d, i) => (
               <View key={i} style={styles.debtRow}>
                 <Avatar name={d.fromName} size={28} />
-                <Text style={[styles.debtName, d.fromId === myId && { color: theme.colors.red }]}>
+                <Text numberOfLines={1} style={[styles.debtName, d.fromId === myId && { color: theme.colors.red }]}>
                   {d.fromId === myId ? "You" : d.fromName}
                 </Text>
                 <Text style={{ color: theme.colors.textFaint }}>→</Text>
                 <Avatar name={d.toName} size={28} />
-                <Text style={[styles.debtName, d.toId === myId && { color: theme.colors.green }]}>
+                <Text numberOfLines={1} style={[styles.debtName, d.toId === myId && { color: theme.colors.green }]}>
                   {d.toId === myId ? "You" : d.toName}
                 </Text>
                 <Text style={styles.debtAmt}>{formatMoney(currency, d.amount)}</Text>
@@ -819,10 +869,22 @@ function ActivityView({
                 </View>
                 {canAct && (
                   <View style={{ flexDirection: "row", gap: 8 }}>
-                    <Pressable style={[styles.iconBtn, styles.approve]} onPress={() => onRespond(s, "approve")}>
+                    <Pressable
+                      style={[styles.iconBtn, styles.approve]}
+                      onPress={() => onRespond(s, "approve")}
+                      hitSlop={6}
+                      accessibilityRole="button"
+                      accessibilityLabel="Confirm payment"
+                    >
                       <Text style={styles.iconTxt}>✓</Text>
                     </Pressable>
-                    <Pressable style={styles.iconBtn} onPress={() => onRespond(s, "decline")}>
+                    <Pressable
+                      style={styles.iconBtn}
+                      onPress={() => onRespond(s, "decline")}
+                      hitSlop={6}
+                      accessibilityRole="button"
+                      accessibilityLabel="Reject payment"
+                    >
                       <Text style={styles.iconTxt}>✕</Text>
                     </Pressable>
                   </View>
@@ -1101,7 +1163,7 @@ function InviteModal({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.modalWrap}>
+      <SheetRoot style={styles.modalWrap}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={[styles.sheet, { paddingBottom: insets.bottom + 20, maxHeight: "88%" }]}>
           <Text style={styles.sheetTitle}>Invite people</Text>
@@ -1170,7 +1232,7 @@ function InviteModal({
             )}
           </ScrollView>
         </View>
-      </View>
+      </SheetRoot>
     </Modal>
   );
 }
@@ -1181,6 +1243,7 @@ const styles = StyleSheet.create({
   coverTop: { position: "absolute", left: 12, right: 12, flexDirection: "row", justifyContent: "space-between" },
   roundBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center" },
   roundTxt: { color: "#fff", fontSize: 28, marginTop: -4 },
+  headIcon: { color: "#fff", fontSize: 18, fontWeight: "700" },
   invite: { backgroundColor: "rgba(0,0,0,0.4)", paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20 },
   coverTitle: { position: "absolute", left: 16, right: 16, bottom: 14 },
   title: { color: "#fff", fontSize: 26, fontWeight: "900" },
@@ -1190,9 +1253,9 @@ const styles = StyleSheet.create({
   stackRing: { borderRadius: 999, borderWidth: 2, borderColor: theme.colors.bg },
   bannerLabel: { color: theme.colors.textFaint, fontSize: 12, textTransform: "uppercase", letterSpacing: 1 },
   bannerVal: { fontWeight: "800", fontSize: 18, marginTop: 2 },
-  tabs: { flexDirection: "row", backgroundColor: "rgba(0,0,0,0.25)", borderRadius: 16, padding: 4, marginTop: 14 },
+  tabs: { flexDirection: "row", ...inset("rgba(0,0,0,0.25)"), borderRadius: 16, padding: 4, marginTop: 14 },
   tab: { flex: 1, paddingVertical: 9, alignItems: "center", borderRadius: 12 },
-  tabActive: { backgroundColor: "rgba(255,255,255,0.15)" },
+  tabActive: { ...raised("rgba(255,255,255,0.15)") },
   tabText: { color: theme.colors.textFaint, fontWeight: "700", fontSize: 13 },
   expRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 10 },
   expIcon: { width: 42, height: 42, borderRadius: 14, alignItems: "center", justifyContent: "center" },
@@ -1200,13 +1263,25 @@ const styles = StyleSheet.create({
   expSub: { color: theme.colors.textFaint, fontSize: 12, marginTop: 2 },
   expTag: { fontSize: 11 },
   expAmt: { fontWeight: "800", fontSize: 15 },
+  playBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    marginLeft: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,138,61,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(255,160,80,0.3)",
+  },
+  playIcon: { color: "#ffb36b", fontSize: 13, marginLeft: 2 },
   expNeutral: { color: theme.colors.textFaint },
-  iconBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: "rgba(255,255,255,0.1)", alignItems: "center", justifyContent: "center" },
+  iconBtn: { width: 34, height: 34, borderRadius: 17, ...raised("rgba(255,255,255,0.1)"), alignItems: "center", justifyContent: "center" },
   approve: { backgroundColor: "rgba(56,217,169,0.25)" },
   iconTxt: { color: "#fff", fontWeight: "800" },
-  debtRow: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "rgba(255,255,255,0.05)", borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10 },
-  debtName: { color: "#fff", fontWeight: "700" },
-  debtAmt: { marginLeft: "auto", color: "#fff", fontWeight: "800" },
+  debtRow: { flexDirection: "row", alignItems: "center", gap: 8, ...raised("rgba(255,255,255,0.05)"), borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10 },
+  debtName: { color: "#fff", fontWeight: "700", flexShrink: 1 },
+  debtAmt: { marginLeft: "auto", paddingLeft: 6, color: "#fff", fontWeight: "800", flexShrink: 0 },
   balRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 7 },
   fab: { position: "absolute", right: 20 },
   fabGrad: { height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center", paddingHorizontal: 22 },
@@ -1219,12 +1294,12 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, paddingLeft: 40 },
   searchClear: { position: "absolute", right: 12 },
   pager: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 16, paddingVertical: 4 },
-  pagerBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.08)", borderWidth: 1, borderColor: theme.colors.border },
+  pagerBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, ...raised("rgba(255,255,255,0.08)"), borderWidth: 1, borderColor: theme.colors.border },
   pagerDisabled: { opacity: 0.35 },
   pagerTxt: { color: "#fff", fontWeight: "700", fontSize: 13 },
   pagerInfo: { color: theme.colors.textDim, fontWeight: "700", fontSize: 13 },
   // Month navigator
-  monthNav: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "rgba(255,255,255,0.05)", borderRadius: 14, paddingHorizontal: 6, paddingVertical: 6, borderWidth: 1, borderColor: theme.colors.border },
+  monthNav: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", ...raised("rgba(255,255,255,0.05)"), borderRadius: 14, paddingHorizontal: 6, paddingVertical: 6, borderWidth: 1, borderColor: theme.colors.border },
   monthBtn: { width: 40, height: 36, alignItems: "center", justifyContent: "center" },
   monthArrow: { color: "#fff", fontSize: 24, marginTop: -4 },
   monthLabel: { color: "#fff", fontWeight: "800", fontSize: 15 },
@@ -1238,14 +1313,14 @@ const styles = StyleSheet.create({
   crown: { width: 44, height: 44, borderRadius: 16, backgroundColor: theme.colors.amber + "26", alignItems: "center", justifyContent: "center" },
   pmRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 7 },
   catIcon: { width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  roleBtn: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.08)", borderWidth: 1, borderColor: theme.colors.border },
+  roleBtn: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, ...raised("rgba(255,255,255,0.08)"), borderWidth: 1, borderColor: theme.colors.border },
   roleBtnPrimary: { backgroundColor: theme.colors.primary + "33", borderColor: theme.colors.primary },
   roleBtnTxt: { color: theme.colors.textDim, fontWeight: "700", fontSize: 12 },
   // Invite modal
-  inviteRow: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "rgba(255,255,255,0.05)", borderRadius: 16, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: theme.colors.border },
-  shareBox: { marginTop: 16, backgroundColor: "rgba(255,255,255,0.05)", borderRadius: 16, padding: 12, borderWidth: 1, borderColor: theme.colors.border },
-  linkRow: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "rgba(0,0,0,0.25)", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: theme.colors.border, marginBottom: 10 },
+  inviteRow: { flexDirection: "row", alignItems: "center", gap: 10, ...raised("rgba(255,255,255,0.05)"), borderRadius: 16, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: theme.colors.border },
+  shareBox: { marginTop: 16, ...raised("rgba(255,255,255,0.05)"), borderRadius: 16, padding: 12, borderWidth: 1, borderColor: theme.colors.border },
+  linkRow: { flexDirection: "row", alignItems: "center", gap: 10, ...inset("rgba(0,0,0,0.25)"), borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: theme.colors.border, marginBottom: 10 },
   shareTitle: { color: theme.colors.textFaint, fontSize: 12, fontWeight: "700", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 },
   shareBtn: { flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 12, borderRadius: 14 },
-  shareGhost: { backgroundColor: "rgba(255,255,255,0.08)", borderWidth: 1, borderColor: theme.colors.border },
+  shareGhost: { ...raised("rgba(255,255,255,0.08)"), borderWidth: 1, borderColor: theme.colors.border },
 });

@@ -84,12 +84,9 @@ export function JoinPage() {
   // Authed (or still loading auth) → joining splash.
   return (
     <div className="flex min-h-screen flex-col items-center justify-center p-4 text-center">
-      <motion.div
-        animate={{ scale: [1, 1.06, 1] }}
-        transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
-      >
+      <div className="logo-float">
         <LogoMark size={64} />
-      </motion.div>
+      </div>
       <div className="mt-4 text-2xl font-black tracking-tight gradient-text-shimmer">
         Joining {preview ? preview.name : "…"}
       </div>

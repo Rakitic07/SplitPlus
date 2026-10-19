@@ -781,7 +781,7 @@ function GroupsView({ secret }: { secret: string }) {
                     className="glass-input appearance-none"
                   >
                     {CURRENCIES.map((c) => (
-                      <option key={c.code} value={c.code} className="bg-[#1c1710]">
+                      <option key={c.code} value={c.code} className="bg-panel">
                         {c.symbol} {c.code} — {c.label}
                       </option>
                     ))}
@@ -914,7 +914,7 @@ export function AdminPage() {
 
   return (
     <div className="min-h-screen">
-      <header className="pt-safe sticky top-0 z-30 border-b border-white/10 bg-[#0a0807]/70 backdrop-blur-xl">
+      <header className="pt-safe sticky top-0 z-30 border-b border-white/10 bg-app/70 backdrop-blur-xl">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
           <div className="flex items-center gap-2">
             <LogoMark size={28} />

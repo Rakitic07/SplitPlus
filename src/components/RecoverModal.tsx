@@ -6,6 +6,7 @@ import {
   Copy,
   KeyRound,
   LifeBuoy,
+  Mail,
   ScanSearch,
   ShieldCheck,
   ShieldQuestion,
@@ -24,7 +25,18 @@ import { useAuth } from "@/state/auth";
 import { useToast } from "@/state/toast";
 import type { SelfUser } from "@shared/types";
 
-type Step = "choose" | "code" | "verify" | "find" | "request" | "requested" | "status" | "done";
+type Step =
+  | "choose"
+  | "email"
+  | "emailCode"
+  | "emailDone"
+  | "code"
+  | "verify"
+  | "find"
+  | "request"
+  | "requested"
+  | "status"
+  | "done";
 
 export function RecoverModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { recover, resetVerify, finishAuth } = useAuth();
@@ -76,6 +88,34 @@ export function RecoverModal({ open, onClose }: { open: boolean; onClose: () => 
   function back() {
     setStep("choose");
     setMatches(null);
+  }
+
+  async function sendEmailCode(e?: React.FormEvent) {
+    e?.preventDefault();
+    setBusy(true);
+    try {
+      const r = await api.emailResetRequest(name.trim());
+      success(r.message);
+      setCode("");
+      setStep("emailCode");
+    } catch (err) {
+      error(err instanceof ApiError ? err.message : "Something went wrong");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitEmailCode(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      await api.emailResetConfirm(name.trim(), code.trim(), passphrase);
+      setStep("emailDone");
+    } catch (err) {
+      error(err instanceof ApiError ? err.message : "Something went wrong");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function submitCode(e: React.FormEvent) {
@@ -151,9 +191,11 @@ export function RecoverModal({ open, onClose }: { open: boolean; onClose: () => 
   }
 
   const title =
-    step === "done"
+    step === "done" || step === "emailDone"
       ? "Passphrase reset"
-      : step === "code"
+      : step === "email" || step === "emailCode"
+        ? "Reset by email"
+        : step === "code"
         ? "Reset with your code"
         : step === "verify"
           ? "Verify it's you"
@@ -172,6 +214,12 @@ export function RecoverModal({ open, onClose }: { open: boolean; onClose: () => 
       {step === "choose" && (
         <div className="space-y-2.5">
           <p className="mb-1 text-sm text-white/55">Forgot your passphrase? Pick how to recover.</p>
+          <ChoiceButton
+            icon={<Mail className="h-5 w-5 text-sky-300" />}
+            title="Email me a reset code"
+            subtitle="If you added a recovery email in Settings."
+            onClick={() => setStep("email")}
+          />
           <ChoiceButton
             icon={<KeyRound className="h-5 w-5 text-emerald-400" />}
             title="I have my recovery code"
@@ -206,6 +254,77 @@ export function RecoverModal({ open, onClose }: { open: boolean; onClose: () => 
               <UserSearch className="h-3.5 w-3.5" /> Forgot your name too?
             </button>
           </div>
+        </div>
+      )}
+
+      {step === "email" && (
+        <form onSubmit={sendEmailCode} className="space-y-4">
+          <BackBtn onClick={back} />
+          <Field label="Your name or recovery email">
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Raktim or you@example.com"
+              autoComplete="username"
+              required
+            />
+          </Field>
+          <Button type="submit" loading={busy} className="w-full">
+            <Mail className="h-4 w-4" /> Send reset code
+          </Button>
+        </form>
+      )}
+
+      {step === "emailCode" && (
+        <form onSubmit={submitEmailCode} className="space-y-4">
+          <BackBtn onClick={() => setStep("email")} />
+          <p className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/55">
+            If <b className="text-white/80">{name.trim()}</b> has a recovery email, a 6-digit code is on
+            its way. Check spam too.
+          </p>
+          <Field label="6-digit code">
+            <Input
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              placeholder="123456"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              className="font-mono text-lg tracking-[0.4em]"
+              required
+            />
+          </Field>
+          <Field label="New passphrase" hint="At least 6 characters.">
+            <PasswordInput
+              value={passphrase}
+              onChange={(e) => setPassphrase(e.target.value)}
+              placeholder="••••••••"
+              required
+            />
+          </Field>
+          <Button type="submit" loading={busy} className="w-full">
+            <KeyRound className="h-4 w-4" /> Reset passphrase
+          </Button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => sendEmailCode()}
+            className="block w-full text-center text-xs text-white/50 underline-offset-2 hover:text-white/80 hover:underline"
+          >
+            Didn't get it? Send again
+          </button>
+        </form>
+      )}
+
+      {step === "emailDone" && (
+        <div className="space-y-4 text-center">
+          <ShieldCheck className="mx-auto h-10 w-10 text-emerald-400" />
+          <div>
+            <h3 className="text-lg font-bold text-white">Passphrase updated</h3>
+            <p className="mt-1 text-sm text-white/60">Log in with your new passphrase.</p>
+          </div>
+          <Button className="w-full" onClick={onClose}>
+            Back to log in
+          </Button>
         </div>
       )}
 

@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Button } from "./ui";
+import { Button, SheetRoot } from "./ui";
 import { api, ApiError, type ExportExpense } from "../lib/api";
 import { formatMoney } from "../shared/currency";
 import { useToast } from "../state/toast";
-import { theme } from "../theme";
+import { theme, inset, raised } from "../theme";
 import type { Expense, GroupDetail } from "../shared/types";
 import { buildReportHtml, shareCsv, sharePdf, toCsv } from "../lib/export";
 
@@ -205,7 +205,7 @@ export function ExportSheet({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.wrap}>
+      <SheetRoot style={styles.wrap}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={[styles.sheet, { paddingBottom: insets.bottom + 20 }]}>
           <Text style={styles.title}>
@@ -248,7 +248,7 @@ export function ExportSheet({
             <Button title="PDF" variant="ghost" onPress={doPdf} loading={busy === "pdf"} disabled={disabled} style={{ flex: 1 }} />
           </View>
         </View>
-      </View>
+      </SheetRoot>
     </Modal>
   );
 }
@@ -258,9 +258,9 @@ const styles = StyleSheet.create({
   sheet: { backgroundColor: theme.colors.bgElevated, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20 },
   title: { color: "#fff", fontSize: 20, fontWeight: "800" },
   sub: { color: theme.colors.textFaint, fontSize: 13, marginTop: 6, marginBottom: 16 },
-  pills: { flexDirection: "row", gap: 8, backgroundColor: "rgba(0,0,0,0.25)", borderRadius: 16, padding: 4 },
+  pills: { flexDirection: "row", gap: 8, ...inset("rgba(0,0,0,0.25)"), borderRadius: 16, padding: 4 },
   pill: { flex: 1, paddingVertical: 9, alignItems: "center", borderRadius: 12 },
-  pillActive: { backgroundColor: "rgba(255,255,255,0.15)" },
+  pillActive: { ...raised("rgba(255,255,255,0.15)") },
   pillText: { color: theme.colors.textFaint, fontWeight: "700", fontSize: 13 },
-  preview: { marginTop: 14, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: "rgba(255,255,255,0.04)", paddingHorizontal: 14, paddingVertical: 12 },
+  preview: { marginTop: 14, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.border, ...raised("rgba(255,255,255,0.04)"), paddingHorizontal: 14, paddingVertical: 12 },
 });

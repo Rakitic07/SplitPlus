@@ -1,15 +1,17 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
+import { imageUrl } from "../lib/images.js";
+import { notifySettlement } from "../lib/ntfy.js";
 import { settlementSchema, settlementActionSchema } from "../../shared/validation.js";
 import { ah, requireAuth, requireMember, zodMessage, type AuthedRequest } from "../lib/http.js";
 
 // Mounted at /api.
 export const settlementsRouter = Router();
 
-const pub = (u: { id: string; name: string; avatar?: string | null }) => ({
+const pub = (u: { id: string; name: string; avatarVer?: string | null }) => ({
   id: u.id,
   name: u.name,
-  avatar: u.avatar ?? null,
+  avatar: imageUrl("u", u.id, u.avatarVer),
 });
 
 const SEL = {
@@ -20,8 +22,8 @@ const SEL = {
   status: true,
   createdAt: true,
   resolvedAt: true,
-  from: { select: { id: true, name: true, avatar: true } },
-  to: { select: { id: true, name: true, avatar: true } },
+  from: { select: { id: true, name: true, avatarVer: true } },
+  to: { select: { id: true, name: true, avatarVer: true } },
 } as const;
 
 type SettlementRow = {
@@ -32,8 +34,8 @@ type SettlementRow = {
   status: string;
   createdAt: Date;
   resolvedAt: Date | null;
-  from: { id: string; name: string; avatar: string | null };
-  to: { id: string; name: string; avatar: string | null };
+  from: { id: string; name: string; avatarVer: string | null };
+  to: { id: string; name: string; avatarVer: string | null };
 };
 
 function toDto(s: SettlementRow, meId: string, hasThumbnail: boolean, thumbnail?: string | null) {
@@ -70,7 +72,7 @@ export async function incomingSettlementsFor(userId: string) {
 // All settlements in a group (with a flag for which carry a proof image).
 // Shared by GET /groups/:id/settlements and the combined bootstrap endpoint.
 export async function listSettlementsFor(groupId: string, meId: string) {
-  const [rows, withThumbs] = await prisma.$transaction([
+  const [rows, withThumbs] = await Promise.all([
     prisma.settlement.findMany({
       where: { groupId },
       orderBy: { createdAt: "desc" },
@@ -128,7 +130,10 @@ settlementsRouter.get(
   })
 );
 
-// POST /api/groups/:groupId/settlements — record a payment I made (pending).
+// POST /api/groups/:groupId/settlements — record a payment.
+//  • direction "pay": I paid `toId`; stays pending until they confirm it.
+//  • direction "receive": `toId` paid me; approved immediately, since the
+//    receiver is the one who would have to confirm it anyway.
 settlementsRouter.post(
   "/groups/:groupId/settlements",
   requireAuth,
@@ -139,30 +144,34 @@ settlementsRouter.post(
     if (!parsed.success) return res.status(400).json({ error: zodMessage(parsed.error) });
 
     const groupId = req.params.groupId;
-    const { toId, amount, note, thumbnail } = parsed.data;
-    if (toId === r.session.userId) {
+    const { toId: otherId, amount, note, thumbnail, direction = "pay" } = parsed.data;
+    const me = r.session.userId;
+    if (otherId === me) {
       return res.status(400).json({ error: "You can't settle with yourself." });
     }
-    const recipient = await prisma.membership.findUnique({
-      where: { groupId_userId: { groupId, userId: toId } },
+    const other = await prisma.membership.findUnique({
+      where: { groupId_userId: { groupId, userId: otherId } },
       select: { id: true },
     });
-    if (!recipient) {
+    if (!other) {
       return res.status(400).json({ error: "That person isn't in this group." });
     }
 
+    const receiving = direction === "receive";
     const s = await prisma.settlement.create({
       data: {
         groupId,
-        fromId: r.session.userId,
-        toId,
+        fromId: receiving ? otherId : me,
+        toId: receiving ? me : otherId,
         amount,
         note: note || null,
         thumbnail: thumbnail || null,
-        status: "pending",
+        status: receiving ? "approved" : "pending",
+        resolvedAt: receiving ? new Date() : null,
       },
       select: SEL,
     });
+    await notifySettlement(s.id, "created");
     return res.status(201).json({ settlement: toDto(s as SettlementRow, r.session.userId, !!thumbnail) });
   })
 );
@@ -195,6 +204,7 @@ settlementsRouter.post(
       data: { status, resolvedAt: new Date() },
       select: SEL,
     });
+    await notifySettlement(updated.id, status);
     return res.json({ settlement: toDto(updated as SettlementRow, r.session.userId, false) });
   })
 );

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Button, Input, Label } from "./ui";
+import { Button, Input, Label, SheetRoot } from "./ui";
 import {
   api,
   ApiError,
@@ -13,7 +13,18 @@ import { useAuth } from "../state/auth";
 import { useToast } from "../state/toast";
 import { theme } from "../theme";
 
-type Step = "choose" | "code" | "verify" | "find" | "request" | "requested" | "status" | "done";
+type Step =
+  | "choose"
+  | "email"
+  | "emailCode"
+  | "emailDone"
+  | "code"
+  | "verify"
+  | "find"
+  | "request"
+  | "requested"
+  | "status"
+  | "done";
 
 // Mirrors the web RecoverModal: recovery code, knowledge-based verification, or
 // an admin-approved request — plus a "check status" and "find my name" helper.
@@ -63,6 +74,34 @@ export function RecoverSheet({ visible, onClose }: { visible: boolean; onClose: 
   function back() {
     setStep("choose");
     setMatches(null);
+  }
+
+  async function sendEmailCode() {
+    if (!name.trim()) return error("Enter your name or recovery email");
+    setBusy(true);
+    try {
+      const r = await api.emailResetRequest(name.trim());
+      success(r.message);
+      setCode("");
+      setStep("emailCode");
+    } catch (err) {
+      error(err instanceof ApiError ? err.message : "Something went wrong");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitEmailCode() {
+    if (code.trim().length !== 6 || !passphrase) return error("Enter the 6-digit code and a new passphrase");
+    setBusy(true);
+    try {
+      await api.emailResetConfirm(name.trim(), code.trim(), passphrase);
+      setStep("emailDone");
+    } catch (err) {
+      error(err instanceof ApiError ? err.message : "Something went wrong");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function submitCode() {
@@ -138,9 +177,11 @@ export function RecoverSheet({ visible, onClose }: { visible: boolean; onClose: 
   }
 
   const title =
-    step === "done"
+    step === "done" || step === "emailDone"
       ? "Passphrase reset"
-      : step === "code"
+      : step === "email" || step === "emailCode"
+        ? "Reset by email"
+        : step === "code"
         ? "Reset with your code"
         : step === "verify"
           ? "Verify it's you"
@@ -156,7 +197,7 @@ export function RecoverSheet({ visible, onClose }: { visible: boolean; onClose: 
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.wrap}>
+      <SheetRoot style={styles.wrap}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={[styles.sheet, { paddingBottom: insets.bottom + 20 }]}>
           <View style={styles.head}>
@@ -170,6 +211,12 @@ export function RecoverSheet({ visible, onClose }: { visible: boolean; onClose: 
             {step === "choose" && (
               <View style={{ gap: 10 }}>
                 <Text style={styles.hint}>Forgot your passphrase? Pick how to recover.</Text>
+                <Choice
+                  emoji="✉️"
+                  title="Email me a reset code"
+                  subtitle="If you added a recovery email in Settings."
+                  onPress={() => setStep("email")}
+                />
                 <Choice
                   emoji="🔑"
                   title="I have my recovery code"
@@ -196,6 +243,55 @@ export function RecoverSheet({ visible, onClose }: { visible: boolean; onClose: 
                     <Text style={styles.link}>🔎 Forgot your name too?</Text>
                   </Pressable>
                 </View>
+              </View>
+            )}
+
+            {step === "email" && (
+              <View style={{ gap: 4 }}>
+                <BackBtn onPress={back} />
+                <Label>Your name or recovery email</Label>
+                <Input
+                  value={name}
+                  onChangeText={setName}
+                  placeholder="e.g. Raktim or you@example.com"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <Button title="Send reset code" onPress={sendEmailCode} loading={busy} style={{ marginTop: 18 }} />
+              </View>
+            )}
+
+            {step === "emailCode" && (
+              <View style={{ gap: 4 }}>
+                <BackBtn onPress={() => setStep("email")} />
+                <Text style={styles.note}>
+                  If “{name.trim()}” has a recovery email, a 6-digit code is on its way. Check spam too.
+                </Text>
+                <Label>6-digit code</Label>
+                <Input
+                  value={code}
+                  onChangeText={(t) => setCode(t.replace(/\D/g, "").slice(0, 6))}
+                  placeholder="123456"
+                  keyboardType="number-pad"
+                  textContentType="oneTimeCode"
+                  autoComplete="one-time-code"
+                />
+                <View style={{ height: 12 }} />
+                <Label>New passphrase</Label>
+                <Input value={passphrase} onChangeText={setPassphrase} placeholder="••••••••" secureTextEntry />
+                <Button title="Reset passphrase" onPress={submitEmailCode} loading={busy} style={{ marginTop: 18 }} />
+                <Pressable onPress={sendEmailCode} disabled={busy} style={{ alignSelf: "center", marginTop: 12 }}>
+                  <Text style={styles.link}>Didn't get it? Send again</Text>
+                </Pressable>
+              </View>
+            )}
+
+            {step === "emailDone" && (
+              <View style={{ gap: 12, alignItems: "center" }}>
+                <Text style={{ fontSize: 40 }}>✅</Text>
+                <Text style={styles.title}>Passphrase updated</Text>
+                <Text style={styles.hint}>Log in with your new passphrase.</Text>
+                <Button title="Back to log in" onPress={onClose} style={{ alignSelf: "stretch" }} />
               </View>
             )}
 
@@ -425,7 +521,7 @@ export function RecoverSheet({ visible, onClose }: { visible: boolean; onClose: 
             )}
           </ScrollView>
         </View>
-      </View>
+      </SheetRoot>
     </Modal>
   );
 }

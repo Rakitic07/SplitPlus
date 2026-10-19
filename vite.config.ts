@@ -19,10 +19,21 @@ export default defineConfig({
       "/api": {
         target: "http://localhost:8787",
         changeOrigin: true,
+        // Forward the browser's host so API-built URLs (images) stay same-origin.
+        xfwd: true,
       },
     },
   },
   build: {
     outDir: "dist",
+    rollupOptions: {
+      output: {
+        // Long-lived vendor chunks: app deploys don't invalidate these in the browser cache.
+        manualChunks: {
+          react: ["react", "react-dom", "react-router-dom"],
+          motion: ["framer-motion"],
+        },
+      },
+    },
   },
 });

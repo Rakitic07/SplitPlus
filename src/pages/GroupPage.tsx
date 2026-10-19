@@ -17,6 +17,7 @@ import {
   ImageIcon,
   Info,
   Pencil,
+  Play,
   Plus,
   Receipt,
   Scale,
@@ -32,6 +33,7 @@ import {
 import { Avatar, AvatarStack, Button, Card, EmptyState } from "@/components/ui";
 import { ShimmerText, SkeletonRows } from "@/components/Shimmer";
 import { ExpenseFormModal } from "@/components/ExpenseFormModal";
+import { ExpenseFlowModal } from "@/components/ExpenseFlow";
 import { SettleUpModal } from "@/components/SettleUpModal";
 import { InviteModal } from "@/components/InviteModal";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -112,6 +114,7 @@ export function GroupPage() {
   const [showExport, setShowExport] = useState(false);
   const [showExpense, setShowExpense] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
+  const [flowExpense, setFlowExpense] = useState<Expense | null>(null);
   // Bumped every time the expense modal opens so it remounts and re-reads the
   // `editing` expense — otherwise its once-only field initialisers keep stale
   // (empty) values and edits don't prefill.
@@ -173,16 +176,23 @@ export function GroupPage() {
     setSearchParams(next, { replace: true });
   }, [searchParams, loading, group, openExpense, setSearchParams]);
 
-  async function deleteExpense(expense: Expense) {
-    if (!confirm(`Delete "${expense.title}"?`)) return;
+  const [pendingDelete, setPendingDelete] = useState<Expense | null>(null);
+  const [deletingExpense, setDeletingExpense] = useState(false);
+
+  async function deleteExpense() {
+    if (!pendingDelete || deletingExpense) return;
+    setDeletingExpense(true);
     try {
-      await api.deleteExpense(groupId, expense.id);
+      await api.deleteExpense(groupId, pendingDelete.id);
       success("Expense deleted");
+      setPendingDelete(null);
       setShowExpense(false);
       setEditing(null);
       refresh();
     } catch (err) {
       error(err instanceof ApiError ? err.message : "Couldn't delete");
+    } finally {
+      setDeletingExpense(false);
     }
   }
 
@@ -268,23 +278,41 @@ export function GroupPage() {
   return (
     <div className="min-h-screen pb-28">
       {/* Cover header */}
-      <div className="relative h-44 w-full overflow-hidden sm:h-52">
+      {/* Covers are cropped to 16:9, so the header keeps that ratio (capped on
+          wide screens) and shows the full crop; a blurred copy fills the sides. */}
+      <div
+        className={`relative w-full overflow-hidden ${group?.thumbnail ? "" : "h-52 sm:h-56"}`}
+        style={{ height: group?.thumbnail ? "min(56.25vw, 22rem)" : undefined }}
+      >
         {group?.thumbnail ? (
-          <img src={group.thumbnail} alt="" className="h-full w-full object-cover" />
+          <>
+            <img
+              src={group.thumbnail}
+              alt=""
+              aria-hidden
+              className="absolute inset-0 h-full w-full scale-110 object-cover opacity-60 blur-2xl"
+            />
+            <img
+              src={group.thumbnail}
+              alt=""
+              className="relative mx-auto aspect-video h-full max-w-full object-cover"
+            />
+          </>
         ) : (
           <div
-            className="flex h-full w-full items-center justify-center text-7xl"
+            className="cover-fallback flex h-full w-full items-center justify-center pb-4 text-6xl sm:text-7xl"
             style={{ background: "linear-gradient(135deg,#3a2a12,#402a1a,#20180e)" }}
           >
             {group?.emoji ?? "👥"}
           </div>
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0a0807] via-[#0a0807]/40 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-app via-app/40 to-transparent" />
 
-        <div className="pt-safe-bar absolute left-0 right-0 top-0 flex items-center justify-between px-4 pb-4">
+        <div className="pt-safe-bar absolute left-0 right-0 top-0 mx-auto flex max-w-4xl items-center justify-between px-4 pb-4">
           <button
             onClick={() => navigate("/")}
-            className="glass rounded-full p-2 text-white/90 transition hover:text-white"
+            aria-label="Back to groups"
+            className="glass rounded-full p-2.5 text-white/90 transition hover:text-white"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
@@ -317,7 +345,7 @@ export function GroupPage() {
           </div>
         </div>
 
-        <div className="absolute bottom-3 left-4 right-4">
+        <div className="absolute bottom-3 left-0 right-0 mx-auto max-w-4xl px-4">
           <div className="flex items-end justify-between gap-3">
             <div className="min-w-0">
               <h1 className="truncate text-2xl font-black text-white drop-shadow">
@@ -350,7 +378,7 @@ export function GroupPage() {
       <main className="mx-auto max-w-4xl px-4">
         {/* My balance banner */}
         <Card strong className="-mt-2 flex items-center justify-between gap-3 p-4">
-          <div>
+          <div className="min-w-0">
             <div className="text-xs uppercase tracking-wider text-white/40">Your balance</div>
             {loading ? (
               <ShimmerText className="text-lg">Calculating…</ShimmerText>
@@ -366,7 +394,7 @@ export function GroupPage() {
               </div>
             )}
           </div>
-          <Button className="!px-4 !py-2.5 text-sm" onClick={() => setShowSettle(true)}>
+          <Button className="shrink-0 whitespace-nowrap !px-4 !py-2.5 text-sm" onClick={() => setShowSettle(true)}>
             <HandCoins className="h-4 w-4" /> Settle up
           </Button>
         </Card>
@@ -383,6 +411,8 @@ export function GroupPage() {
             <button
               key={t.k}
               onClick={() => goTab(t.k)}
+              aria-label={t.label}
+              aria-pressed={tab === t.k}
               className={`flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-xs font-semibold transition sm:text-sm ${
                 tab === t.k ? "bg-white/15 text-white" : "text-white/50 hover:text-white/80"
               }`}
@@ -393,7 +423,9 @@ export function GroupPage() {
           ))}
         </div>
 
-        <div className="mt-4 overflow-hidden" {...swipe}>
+        {/* Padding + matching negative margin leaves room for card shadows,
+            which the swipe clip would otherwise cut off at the corners. */}
+        <div className="-mx-4 -mb-6 mt-1 overflow-hidden px-4 pb-6 pt-3" {...swipe}>
           {loading ? (
             <Card className="p-2">
               <SkeletonRows count={6} />
@@ -415,6 +447,7 @@ export function GroupPage() {
                     currency={currency}
                     myId={group.myUserId}
                     onOpen={openExpense}
+                    onPlay={setFlowExpense}
                   />
                 ) : tab === "balances" ? (
                   <BalancesTab
@@ -484,7 +517,7 @@ export function GroupPage() {
             setExpenseFormKey((k) => k + 1);
             setShowExpense(true);
           }}
-          className="glass-btn-primary fixed bottom-6 right-6 z-30 flex h-14 items-center gap-2 !rounded-full !px-5 shadow-glow"
+          className="glass-btn-primary fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] right-6 z-30 flex h-14 items-center gap-2 !rounded-full !px-5 shadow-glow"
         >
           <Plus className="h-5 w-5" /> Add
         </button>
@@ -492,6 +525,14 @@ export function GroupPage() {
 
       {group && (
         <>
+          <ExpenseFlowModal
+            open={flowExpense !== null}
+            onClose={() => setFlowExpense(null)}
+            expense={flowExpense}
+            members={group.members}
+            myId={group.myUserId}
+            currency={currency}
+          />
           <ExpenseFormModal
             key={expenseFormKey}
             open={showExpense}
@@ -502,7 +543,22 @@ export function GroupPage() {
             group={group}
             editing={editing}
             onSaved={refresh}
-            onDelete={deleteExpense}
+            onDelete={setPendingDelete}
+          />
+          <ConfirmDialog
+            open={pendingDelete !== null}
+            danger
+            loading={deletingExpense}
+            title="Delete this expense?"
+            message={
+              <>
+                <b className="text-white">{pendingDelete?.title}</b> will be removed and everyone's
+                balances recalculated.
+              </>
+            }
+            confirmLabel="Delete expense"
+            onConfirm={deleteExpense}
+            onCancel={() => setPendingDelete(null)}
           />
           <SettleUpModal
             open={showSettle}
@@ -592,6 +648,7 @@ function SearchField({
         <button
           type="button"
           onClick={() => onChange("")}
+          aria-label="Clear search"
           className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 transition hover:text-white/80"
         >
           <X className="h-4 w-4" />
@@ -648,11 +705,13 @@ function ExpensesTab({
   currency,
   myId,
   onOpen,
+  onPlay,
 }: {
   expenses: Expense[];
   currency: string;
   myId: string;
   onOpen: (id: string) => void;
+  onPlay: (e: Expense) => void;
 }) {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
@@ -707,13 +766,22 @@ function ExpensesTab({
         const iPaid = e.paidBy.id === myId ? e.amount : 0;
         const net = iPaid - myShare;
         return (
-          <motion.button
+          <motion.div
             key={e.id}
+            role="button"
+            tabIndex={0}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: Math.min(i * 0.02, 0.3) }}
             onClick={() => onOpen(e.id)}
-            className="flex w-full items-center gap-3 px-3 py-3 text-left transition hover:bg-white/5"
+            onKeyDown={(ev) => {
+              if (ev.target !== ev.currentTarget) return;
+              if (ev.key === "Enter" || ev.key === " ") {
+                ev.preventDefault();
+                onOpen(e.id);
+              }
+            }}
+            className="flex w-full cursor-pointer items-center gap-3 px-3 py-3 text-left transition hover:bg-white/5"
           >
             <div
               className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-xl"
@@ -733,7 +801,9 @@ function ExpensesTab({
             </div>
             <div className="text-right">
               {Math.abs(net) < 0.01 ? (
-                <div className="text-xs text-white/40">not involved</div>
+                <div className="text-xs text-white/40">
+                  {iPaid > 0 || myShare > 0 ? "no balance" : "not involved"}
+                </div>
               ) : net > 0 ? (
                 <>
                   <div className="text-xs text-emerald-400/80">you lent</div>
@@ -746,7 +816,19 @@ function ExpensesTab({
                 </>
               )}
             </div>
-          </motion.button>
+            <button
+              type="button"
+              onClick={(ev) => {
+                ev.stopPropagation();
+                onPlay(e);
+              }}
+              title="Play money flow"
+              aria-label={`Play money flow for ${e.title}`}
+              className="-mr-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-orange-400/25 bg-orange-500/10 text-orange-300 transition hover:bg-orange-500/20 hover:text-orange-200"
+            >
+              <Play className="h-4 w-4 translate-x-[1px] fill-current" />
+            </button>
+          </motion.div>
         );
       })}
         </Card>
@@ -795,18 +877,24 @@ function BalancesTab({
             {debts.map((d, i) => (
               <div
                 key={i}
-                className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2.5"
+                className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2.5 sm:gap-3"
               >
-                <Avatar name={d.fromName} size={30} />
-                <span className={`text-sm font-semibold ${d.fromId === myId ? "text-rose-300" : "text-white/80"}`}>
+                <Avatar name={d.fromName} size={30} className="hidden shrink-0 min-[400px]:flex" />
+                <span
+                  className={`min-w-0 truncate text-sm font-semibold ${d.fromId === myId ? "text-rose-300" : "text-white/80"}`}
+                >
                   {d.fromId === myId ? "You" : d.fromName}
                 </span>
-                <ArrowRight className="h-4 w-4 text-white/30" />
-                <Avatar name={d.toName} size={30} />
-                <span className={`text-sm font-semibold ${d.toId === myId ? "text-emerald-300" : "text-white/80"}`}>
+                <ArrowRight className="h-4 w-4 shrink-0 text-white/30" />
+                <Avatar name={d.toName} size={30} className="hidden shrink-0 min-[400px]:flex" />
+                <span
+                  className={`min-w-0 truncate text-sm font-semibold ${d.toId === myId ? "text-emerald-300" : "text-white/80"}`}
+                >
                   {d.toId === myId ? "You" : d.toName}
                 </span>
-                <span className="ml-auto font-bold text-white">{formatMoney(currency, d.amount)}</span>
+                <span className="ml-auto shrink-0 whitespace-nowrap pl-1 font-bold tabular-nums text-white">
+                  {formatMoney(currency, d.amount)}
+                </span>
               </div>
             ))}
           </div>
@@ -1393,13 +1481,17 @@ function ActivityTab({
                   <div className="flex gap-1.5">
                     <button
                       onClick={() => onRespond(s, "approve")}
-                      className="rounded-full bg-emerald-500/20 p-2 text-emerald-300 transition hover:bg-emerald-500/30"
+                      aria-label="Confirm payment"
+                      title="Confirm payment"
+                      className="rounded-full bg-emerald-500/20 p-2.5 text-emerald-300 transition hover:bg-emerald-500/30"
                     >
                       <Check className="h-4 w-4" />
                     </button>
                     <button
                       onClick={() => onRespond(s, "decline")}
-                      className="rounded-full bg-white/10 p-2 text-white/60 transition hover:bg-white/20"
+                      aria-label="Reject payment"
+                      title="Reject payment"
+                      className="rounded-full bg-white/10 p-2.5 text-white/60 transition hover:bg-white/20"
                     >
                       <X className="h-4 w-4" />
                     </button>

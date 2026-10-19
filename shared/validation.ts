@@ -7,13 +7,67 @@ const nameField = z
   .min(2, "Name must be at least 2 characters")
   .max(40, "Name is too long");
 
+// For names being CREATED (signup / rename): "@" is reserved so a username can
+// never be mistaken for an email at login.
+const newNameField = nameField.refine((s) => !s.includes("@"), "Name can't contain “@”");
+
 const passField = z
   .string()
   .min(6, "Passphrase must be at least 6 characters")
   .max(128, "Passphrase is too long");
 
+// Username, or the verified recovery email if the account has one.
+const identifierField = z
+  .string()
+  .trim()
+  .min(2, "Enter your name or email")
+  .max(254, "That's too long");
+
+const emailField = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .max(254, "Email is too long")
+  .email("Enter a valid email address");
+
 export const authSchema = z.object({
-  name: nameField,
+  name: newNameField,
+  passphrase: passField,
+});
+
+// Login accepts a name OR a verified email in the `name` field (kept as `name`
+// so older app builds keep working).
+export const loginSchema = z.object({
+  name: identifierField,
+  passphrase: z.string().min(1, "Enter your passphrase").max(128),
+});
+
+// ── Recovery email ──────────────────────────────────────────────────────
+export const emailStartSchema = z.object({
+  email: emailField,
+  passphrase: z.string().min(1, "Enter your current passphrase").max(128),
+});
+export const emailCodeSchema = z.object({
+  code: z.string().trim().regex(/^\d{6}$/, "Enter the 6-digit code"),
+});
+export const emailRemoveSchema = z.object({
+  passphrase: z.string().min(1, "Enter your current passphrase").max(128),
+});
+export const changePassphraseSchema = z
+  .object({
+    current: z.string().min(1, "Enter your current passphrase").max(128),
+    next: passField,
+  })
+  .refine((d) => d.current !== d.next, {
+    message: "New passphrase must be different from the current one",
+    path: ["next"],
+  });
+export const emailResetRequestSchema = z.object({
+  identifier: identifierField,
+});
+export const emailResetConfirmSchema = z.object({
+  identifier: identifierField,
+  code: z.string().trim().regex(/^\d{6}$/, "Enter the 6-digit code"),
   passphrase: passField,
 });
 
@@ -74,7 +128,7 @@ export const adminActionSchema = z.object({
 // Admin editing a user's display name (bypasses the self-service rate limit,
 // but still enforces case-insensitive uniqueness on the server).
 export const adminUserPatchSchema = z.object({
-  name: nameField,
+  name: newNameField,
 });
 
 // Admin editing a group's basics (name / currency / emoji).
@@ -103,13 +157,30 @@ export const settingsSchema = z
     defaultCurrency: z.string().trim().length(3).optional(),
     reminderEnabled: z.boolean().optional(),
     reminderFrequency: reminderFrequencyEnum.optional(),
+    sessionPolicy: z.enum(["6months", "never"]).optional(),
+    theme: z.enum(["glass", "neumorph"]).optional(),
   })
   .refine((d) => Object.keys(d).length > 0, { message: "Nothing to update" });
+
+// ntfy push notifications. The topic is effectively a password on public
+// servers, so require something long enough to be unguessable.
+export const ntfySchema = z.object({
+  topic: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9_-]{6,64}$/, "Topic: 6–64 letters, numbers, - or _ (no spaces)"),
+  server: z
+    .string()
+    .trim()
+    .max(200)
+    .refine((v) => v === "" || /^https:\/\/[^\s/?#]+(\/[^\s?#]*)?$/.test(v), "Server must be an https:// URL")
+    .optional(),
+});
 
 // Changing the display name — same rules as sign-up (2–40 chars). The server
 // additionally enforces uniqueness and a "twice per 30 days" limit.
 export const changeNameSchema = z.object({
-  name: nameField,
+  name: newNameField,
 });
 
 // ── Groups ──────────────────────────────────────────────────────────────
@@ -173,7 +244,10 @@ export const expenseSchema = z
 
 // ── Settlements ─────────────────────────────────────────────────────────
 export const settlementSchema = z.object({
-  toId: z.string().min(1, "Choose who you're paying"),
+  // The other person. "pay" (default, what older app builds send): I paid them.
+  // "receive": they paid me.
+  toId: z.string().min(1, "Choose who you're settling with"),
+  direction: z.enum(["pay", "receive"]).optional(),
   amount: z
     .number({ invalid_type_error: "Amount must be a number" })
     .positive("Amount must be greater than 0")

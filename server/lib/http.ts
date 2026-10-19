@@ -38,10 +38,11 @@ export function zodMessage(err: ZodError): string {
 
 // Middleware: require a valid session (verified + user exists).
 export const requireAuth: RequestHandler = (req, res, next) => {
-  getActiveUser(req)
+  getActiveUser(req, res)
     .then((session) => {
       if (!session) {
-        res.status(401).json({ error: "Unauthorized" });
+        // `code` lets clients tell "signed out" apart from other 401s (e.g. a wrong passphrase).
+        res.status(401).json({ error: "Your session has ended. Please log in again.", code: "session" });
         return;
       }
       (req as AuthedRequest).session = session;

@@ -52,6 +52,7 @@ export function InviteModal({
   const [results, setResults] = useState<PublicUser[]>([]);
   const [pending, setPending] = useState<{ id: string; invitee: PublicUser }[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
+  const [searching, setSearching] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -79,18 +80,26 @@ export function InviteModal({
   useEffect(() => {
     if (query.trim().length < 3) {
       setResults([]);
+      setSearching(false);
       return;
     }
+    setSearching(true);
+    let live = true;
     const t = setTimeout(() => {
       api
         .searchUsers(query.trim())
-        .then((r) => setResults(r.users))
-        .catch(() => setResults([]));
+        .then((r) => live && setResults(r.users))
+        .catch(() => live && setResults([]))
+        .finally(() => live && setSearching(false));
     }, 250);
-    return () => clearTimeout(t);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
   }, [query]);
 
   async function invite(u?: PublicUser) {
+    if (busy) return;
     const name = u?.name ?? query.trim();
     if (!name) return error("Enter a name");
     setBusy(name);
@@ -140,7 +149,7 @@ export function InviteModal({
           </div>
         )}
 
-        {query.trim().length >= 3 && results.length === 0 && (
+        {query.trim().length >= 3 && results.length === 0 && !searching && (
           <p className="text-center text-sm text-white/40">
             No one found. They need to log in once before you can invite them.
           </p>

@@ -124,10 +124,20 @@ export function ImageCropper({
     });
   }
 
-  function onWheel(e: React.WheelEvent) {
+  // React attaches wheel listeners as passive, so preventDefault() there can't
+  // stop the modal from scrolling; a native non-passive listener can.
+  const wheelZoom = useRef<(e: WheelEvent) => void>(() => {});
+  wheelZoom.current = (e) => {
     e.preventDefault();
     zoomTo(scale + (e.deltaY < 0 ? 0.12 : -0.12));
-  }
+  };
+  useEffect(() => {
+    const el = frameRef.current;
+    if (!open || !el) return;
+    const h = (e: WheelEvent) => wheelZoom.current(e);
+    el.addEventListener("wheel", h, { passive: false });
+    return () => el.removeEventListener("wheel", h);
+  }, [open]);
 
   function apply() {
     const img = imgRef.current;
@@ -174,7 +184,6 @@ export function ImageCropper({
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
-          onWheel={onWheel}
           style={{ aspectRatio: String(aspect) }}
           className="relative w-full cursor-grab touch-none select-none overflow-hidden rounded-2xl bg-black/40 active:cursor-grabbing"
         >

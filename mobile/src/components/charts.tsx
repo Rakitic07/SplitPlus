@@ -1,7 +1,7 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Svg, { Circle, G } from "react-native-svg";
-import { theme } from "../theme";
+import { theme, inset } from "../theme";
 import { categoryMeta } from "../shared/categories";
 import { formatMoney } from "../shared/currency";
 import { colorForName } from "../lib/utils";
@@ -146,6 +146,6 @@ const styles = StyleSheet.create({
   barTop: { flexDirection: "row", justifyContent: "space-between" },
   barName: { color: theme.colors.textDim, fontSize: 14 },
   barVal: { color: "#fff", fontWeight: "700", fontSize: 14 },
-  barTrack: { height: 10, backgroundColor: "rgba(255,255,255,0.08)", borderRadius: 6, overflow: "hidden" },
+  barTrack: { height: 10, ...inset("rgba(255,255,255,0.08)"), borderRadius: 6, overflow: "hidden" },
   barFill: { height: 10, borderRadius: 6 },
 });

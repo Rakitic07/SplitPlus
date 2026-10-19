@@ -20,14 +20,33 @@ model User {
   nameKey      String  @unique // lowercased name for case-insensitive uniqueness
   passHash     String
   recoveryHash String?
+  // Verified recovery email (lowercased). Only set after the user confirms a
+  // code sent to it, so it can safely double as a login identifier.
+  email        String?  @unique
   // Tiny base64 avatar (data URL, capped) — optional profile picture.
   avatar       String?
+  // Content hash of `avatar`. Lists reference the image by this version
+  // (/api/img/u/:id/:ver) instead of inlining the base64 in every payload.
+  avatarVer    String?
+  // ── Sessions ──────────────────────────────────────────────────────
+  // "6months" = sign out after 6 months without opening the app;
+  // "never" = stay signed in until the user logs out.
+  sessionPolicy  String @default("6months")
+  // Embedded in every session token; bumping it signs out all devices.
+  sessionVersion Int    @default(0)
   // ── Personal settings ─────────────────────────────────────────────
+  // App look: "glass" (default) | "neumorph". Synced across web and phone.
+  theme             String  @default("glass")
   // Pre-selected currency so new groups don't prompt every time.
   defaultCurrency   String  @default("INR")
   // In-app "settle up" nudges. frequency: daily | weekly | monthly.
   reminderEnabled   Boolean @default(false)
   reminderFrequency String  @default("weekly")
+  // Optional ntfy push for settlements. The topic acts like a password (anyone
+  // who knows it can read the notifications), so it's never shown to others.
+  // ntfyServer null = https://ntfy.sh.
+  ntfyTopic         String?
+  ntfyServer        String?
   createdAt    DateTime @default(now())
 
   memberships     Membership[]
@@ -41,6 +60,24 @@ model User {
   settlementsTo   Settlement[] @relation("SettlementTo")
   resetRequests   ResetRequest[]
   nameChanges     NameChange[]
+  emailCodes      EmailCode[]
+}
+
+// Short-lived 6-digit codes sent by email. purpose "verify" confirms a new
+// recovery email (held in `email` until verified); "reset" lets the user set a
+// new passphrase. Stored as an HMAC, never in plain text.
+model EmailCode {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purpose   String
+  email     String
+  codeHash  String
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId, purpose])
 }
 
 // Audit trail of display-name changes. Used to enforce a "twice per rolling
@@ -62,6 +99,8 @@ model Group {
   name        String
   // Tiny base64 thumbnail (data URL, capped ~120KB) — the group cover image.
   thumbnail   String?
+  // Content hash of `thumbnail` (see User.avatarVer).
+  thumbVer    String?
   // ISO 4217 currency code for the whole group (defaults to INR).
   currency    String   @default("INR")
   emoji       String?

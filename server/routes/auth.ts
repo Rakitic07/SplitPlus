@@ -1,17 +1,33 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
+import { randomBytes } from "node:crypto";
 import { prisma } from "../lib/prisma.js";
 import {
   authSchema,
   changeNameSchema,
+  changePassphraseSchema,
+  emailCodeSchema,
+  emailRemoveSchema,
+  emailResetConfirmSchema,
+  emailResetRequestSchema,
+  emailStartSchema,
   findSchema,
+  loginSchema,
+  ntfySchema,
   recoverSchema,
   resetRequestSchema,
   resetStatusSchema,
   resetVerifySchema,
   settingsSchema,
 } from "../../shared/validation.js";
-import { createSession, clearSession, getActiveUser } from "../lib/auth.js";
+import {
+  asPolicy,
+  createSession,
+  clearSession,
+  getActiveUser,
+  SESSION_HEADER,
+} from "../lib/auth.js";
+import { avatarData, imageUrl } from "../lib/images.js";
 import { ah, requireAuth, zodMessage, type AuthedRequest } from "../lib/http.js";
 import {
   generateRecoveryCode,
@@ -20,6 +36,16 @@ import {
   hashTicket,
   normalizeCode,
 } from "../lib/recovery.js";
+import { consumeCode, cooldownLeft, issueCode, maskEmail } from "../lib/emailCodes.js";
+import { codeEmail, EmailNotConfiguredError, sendEmail } from "../lib/mailer.js";
+import { requestOrigin } from "../lib/images.js";
+import {
+  checkNtfyServer,
+  DEFAULT_NTFY_SERVER,
+  normalizeServer,
+  NtfyError,
+  publish,
+} from "../lib/ntfy.js";
 
 export const authRouter = Router();
 
@@ -27,10 +53,10 @@ export const authRouter = Router();
 // keeps response timing constant and avoids leaking whether an account exists.
 const DUMMY_HASH = "$2a$12$C6UzMDM.H6dfI/f/IKcEeO7dQ6b3q6zJ8b3q6zJ8b3q6zJ8b3q6zC";
 
-const publicUser = (u: { id: string; name: string; avatar?: string | null }) => ({
+const publicUser = (u: { id: string; name: string; avatarVer?: string | null }) => ({
   id: u.id,
   name: u.name,
-  avatar: u.avatar ?? null,
+  avatar: imageUrl("u", u.id, u.avatarVer),
 });
 
 // The shape of "me" — public fields plus the personal settings the client
@@ -38,28 +64,42 @@ const publicUser = (u: { id: string; name: string; avatar?: string | null }) => 
 type SelfRow = {
   id: string;
   name: string;
-  avatar?: string | null;
+  avatarVer?: string | null;
+  email?: string | null;
   defaultCurrency?: string;
   reminderEnabled?: boolean;
   reminderFrequency?: string;
+  sessionPolicy?: string;
+  theme?: string;
+  ntfyTopic?: string | null;
+  ntfyServer?: string | null;
   createdAt?: Date;
 };
 const selfUser = (u: SelfRow) => ({
   id: u.id,
   name: u.name,
-  avatar: u.avatar ?? null,
+  avatar: imageUrl("u", u.id, u.avatarVer),
+  email: u.email ?? null,
   defaultCurrency: u.defaultCurrency ?? "INR",
   reminderEnabled: u.reminderEnabled ?? false,
   reminderFrequency: (u.reminderFrequency ?? "weekly") as "daily" | "weekly" | "monthly",
+  sessionPolicy: asPolicy(u.sessionPolicy),
+  theme: (u.theme === "neumorph" ? "neumorph" : "glass") as "glass" | "neumorph",
+  ntfy: u.ntfyTopic ? { topic: u.ntfyTopic, server: normalizeServer(u.ntfyServer) } : null,
   createdAt: u.createdAt?.toISOString(),
 });
 const SELF_SELECT = {
   id: true,
   name: true,
-  avatar: true,
+  avatarVer: true,
+  email: true,
   defaultCurrency: true,
   reminderEnabled: true,
   reminderFrequency: true,
+  sessionPolicy: true,
+  theme: true,
+  ntfyTopic: true,
+  ntfyServer: true,
   createdAt: true,
 } as const;
 
@@ -93,19 +133,28 @@ authRouter.post(
   })
 );
 
-// POST /api/auth/login — unlock an existing account.
+// Resolve a login identifier: the username first, then — only if it looks like
+// one — a verified recovery email. Accounts without an email stay name-only.
+async function findByIdentifier(identifier: string) {
+  const key = identifier.trim().toLowerCase();
+  const byName = await prisma.user.findUnique({ where: { nameKey: key } });
+  if (byName || !key.includes("@")) return byName;
+  return prisma.user.findUnique({ where: { email: key } });
+}
+
+// POST /api/auth/login — unlock an existing account (name or verified email).
 authRouter.post(
   "/login",
   ah(async (req, res) => {
-    const parsed = authSchema.safeParse(req.body);
+    const parsed = loginSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: zodMessage(parsed.error) });
 
     const { name, passphrase } = parsed.data;
-    const user = await prisma.user.findUnique({ where: { nameKey: name.toLowerCase() } });
+    const user = await findByIdentifier(name);
 
     const ok = await bcrypt.compare(passphrase, user?.passHash ?? DUMMY_HASH);
     if (!user || !ok) {
-      return res.status(401).json({ error: "Incorrect name or passphrase." });
+      return res.status(401).json({ error: "Incorrect name/email or passphrase." });
     }
 
     const token = await createSession(res, { userId: user.id, name: user.name });
@@ -136,7 +185,8 @@ authRouter.post(
     const recoveryHash = await bcrypt.hash(normalizeCode(newRecovery), 12);
     const updated = await prisma.user.update({
       where: { id: user.id },
-      data: { passHash, recoveryHash },
+      // A new passphrase signs out every other device.
+      data: { passHash, recoveryHash, sessionVersion: { increment: 1 } },
       select: SELF_SELECT,
     });
 
@@ -232,7 +282,7 @@ authRouter.post(
     const recoveryHash = await bcrypt.hash(normalizeCode(newRecovery), 12);
     const updated = await prisma.user.update({
       where: { id: user.id },
-      data: { passHash, recoveryHash },
+      data: { passHash, recoveryHash, sessionVersion: { increment: 1 } },
       select: SELF_SELECT,
     });
 
@@ -325,7 +375,7 @@ authRouter.post(
 authRouter.get(
   "/me",
   ah(async (req, res) => {
-    const session = await getActiveUser(req);
+    const session = await getActiveUser(req, res);
     if (!session) return res.json({ authenticated: false });
     const user = await prisma.user.findUnique({
       where: { id: session.userId },
@@ -336,10 +386,207 @@ authRouter.get(
   })
 );
 
+// ── Recovery email ──────────────────────────────────────────────────────
+
+function mailError(res: import("express").Response, err: unknown) {
+  if (err instanceof EmailNotConfiguredError) {
+    return res.status(503).json({ error: err.message });
+  }
+  return res.status(502).json({ error: "Couldn't send the email. Try again in a minute." });
+}
+
+// POST /api/auth/email/start — send a verification code to a new recovery
+// email. Requires the current passphrase so a borrowed, unlocked device can't
+// silently attach an attacker's address.
+authRouter.post(
+  "/email/start",
+  requireAuth,
+  ah(async (req, res) => {
+    const r = req as AuthedRequest;
+    const parsed = emailStartSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: zodMessage(parsed.error) });
+    const { email, passphrase } = parsed.data;
+
+    const me = await prisma.user.findUnique({ where: { id: r.session.userId } });
+    if (!me || !(await bcrypt.compare(passphrase, me.passHash))) {
+      return res.status(401).json({ error: "Incorrect passphrase." });
+    }
+    if (me.email === email) {
+      return res.status(400).json({ error: "That's already your recovery email." });
+    }
+    const taken = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+    if (taken) {
+      return res.status(409).json({ error: "That email is already linked to another account." });
+    }
+    const wait = await cooldownLeft(me.id, "verify");
+    if (wait > 0) return res.status(429).json({ error: `Please wait ${wait}s before requesting another code.` });
+
+    const code = await issueCode(me.id, "verify", email);
+    const { text, html } = codeEmail({
+      code,
+      heading: "Confirm your recovery email",
+      intro: `Enter this code in Split+ to link this email to your account “${me.name}”. You'll be able to log in with it and reset a forgotten passphrase.`,
+      origin: requestOrigin(),
+    });
+    try {
+      await sendEmail(email, "Confirm your Split+ recovery email", text, html);
+    } catch (err) {
+      return mailError(res, err);
+    }
+    return res.json({ ok: true, sentTo: maskEmail(email) });
+  })
+);
+
+// POST /api/auth/email/verify — confirm the code; the email is saved only now.
+authRouter.post(
+  "/email/verify",
+  requireAuth,
+  ah(async (req, res) => {
+    const r = req as AuthedRequest;
+    const parsed = emailCodeSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: zodMessage(parsed.error) });
+
+    const result = await consumeCode(r.session.userId, "verify", parsed.data.code);
+    if (!result.ok) return res.status(400).json({ error: result.error });
+
+    try {
+      const user = await prisma.user.update({
+        where: { id: r.session.userId },
+        data: { email: result.email },
+        select: SELF_SELECT,
+      });
+      return res.json({ user: selfUser(user) });
+    } catch {
+      return res.status(409).json({ error: "That email is already linked to another account." });
+    }
+  })
+);
+
+// POST /api/auth/email/remove — unlink the recovery email (passphrase required).
+authRouter.post(
+  "/email/remove",
+  requireAuth,
+  ah(async (req, res) => {
+    const r = req as AuthedRequest;
+    const parsed = emailRemoveSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: zodMessage(parsed.error) });
+
+    const me = await prisma.user.findUnique({ where: { id: r.session.userId } });
+    if (!me || !(await bcrypt.compare(parsed.data.passphrase, me.passHash))) {
+      return res.status(401).json({ error: "Incorrect passphrase." });
+    }
+    const [user] = await prisma.$transaction([
+      prisma.user.update({ where: { id: me.id }, data: { email: null }, select: SELF_SELECT }),
+      prisma.emailCode.deleteMany({ where: { userId: me.id } }),
+    ]);
+    return res.json({ user: selfUser(user) });
+  })
+);
+
+const EMAIL_RESET_SENT =
+  "If that account has a recovery email, we've sent a 6-digit code to it. It expires in 15 minutes.";
+const EMAIL_RESET_FAIL = "Incorrect or expired code. Request a new one.";
+
+// POST /api/auth/email-reset/request — forgot passphrase: email a reset code.
+// Always answers the same way so it never reveals which accounts exist.
+authRouter.post(
+  "/email-reset/request",
+  ah(async (req, res) => {
+    const parsed = emailResetRequestSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: zodMessage(parsed.error) });
+
+    if (!process.env.RESEND_API_KEY && process.env.NODE_ENV === "production") {
+      return res.status(503).json({ error: "Email isn't set up on this server yet." });
+    }
+
+    const user = await findByIdentifier(parsed.data.identifier);
+    if (user?.email && (await cooldownLeft(user.id, "reset")) === 0) {
+      const code = await issueCode(user.id, "reset", user.email);
+      const { text, html } = codeEmail({
+        code,
+        heading: "Reset your passphrase",
+        intro: `Someone asked to reset the passphrase for the Split+ account “${user.name}”. Enter this code in the app to set a new one.`,
+        origin: requestOrigin(),
+      });
+      try {
+        await sendEmail(user.email, "Reset your Split+ passphrase", text, html);
+      } catch (err) {
+        console.error("[email-reset] send failed", err);
+      }
+    }
+    return res.json({ ok: true, message: EMAIL_RESET_SENT });
+  })
+);
+
+// POST /api/auth/email-reset/confirm — set a new passphrase with the code.
+// Doesn't sign in: the user logs in with the new passphrase afterwards.
+authRouter.post(
+  "/email-reset/confirm",
+  ah(async (req, res) => {
+    const parsed = emailResetConfirmSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: zodMessage(parsed.error) });
+    const { identifier, code, passphrase } = parsed.data;
+
+    const user = await findByIdentifier(identifier);
+    if (!user?.email) return res.status(400).json({ error: EMAIL_RESET_FAIL });
+
+    const result = await consumeCode(user.id, "reset", code);
+    if (!result.ok || result.email !== user.email) {
+      return res.status(400).json({ error: EMAIL_RESET_FAIL });
+    }
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passHash: await bcrypt.hash(passphrase, 12), sessionVersion: { increment: 1 } },
+    });
+    return res.json({ ok: true, name: user.name });
+  })
+);
+
+// POST /api/auth/passphrase — change the passphrase while signed in. Signs out
+// every other device; this one gets a fresh token so it stays signed in.
+authRouter.post(
+  "/passphrase",
+  requireAuth,
+  ah(async (req, res) => {
+    const r = req as AuthedRequest;
+    const parsed = changePassphraseSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: zodMessage(parsed.error) });
+
+    const me = await prisma.user.findUnique({ where: { id: r.session.userId } });
+    if (!me || !(await bcrypt.compare(parsed.data.current, me.passHash))) {
+      return res.status(401).json({ error: "Incorrect current passphrase." });
+    }
+    await prisma.user.update({
+      where: { id: me.id },
+      data: { passHash: await bcrypt.hash(parsed.data.next, 12), sessionVersion: { increment: 1 } },
+    });
+    const token = await createSession(res, { userId: me.id, name: me.name });
+    return res.json({ ok: true, token });
+  })
+);
+
 // POST /api/auth/logout
 authRouter.post(
   "/logout",
   ah(async (_req, res) => {
+    clearSession(res);
+    return res.json({ ok: true });
+  })
+);
+
+// POST /api/auth/logout-all — revoke every session (this device included) by
+// bumping the version every token carries.
+authRouter.post(
+  "/logout-all",
+  requireAuth,
+  ah(async (req, res) => {
+    const r = req as AuthedRequest;
+    await prisma.user.update({
+      where: { id: r.session.userId },
+      data: { sessionVersion: { increment: 1 } },
+    });
+    res.removeHeader(SESSION_HEADER);
     clearSession(res);
     return res.json({ ok: true });
   })
@@ -359,7 +606,7 @@ authRouter.get(
         nameKey: { contains: q },
         NOT: { id: r.session.userId },
       },
-      select: { id: true, name: true, avatar: true },
+      select: { id: true, name: true, avatarVer: true },
       take: 8,
       orderBy: { name: "asc" },
     });
@@ -376,19 +623,123 @@ authRouter.patch(
     const parsed = settingsSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: zodMessage(parsed.error) });
 
-    const { avatar, defaultCurrency, reminderEnabled, reminderFrequency } = parsed.data;
+    const { avatar, defaultCurrency, reminderEnabled, reminderFrequency, sessionPolicy, theme } =
+      parsed.data;
     const user = await prisma.user.update({
       where: { id: r.session.userId },
       data: {
-        // `avatar` may be an empty string to clear it — treat "" as null.
-        ...(avatar !== undefined ? { avatar: avatar || null } : {}),
+        // `avatar` may be an empty string to clear it.
+        ...avatarData(avatar),
         ...(defaultCurrency ? { defaultCurrency: defaultCurrency.toUpperCase() } : {}),
         ...(reminderEnabled !== undefined ? { reminderEnabled } : {}),
         ...(reminderFrequency ? { reminderFrequency } : {}),
+        ...(sessionPolicy ? { sessionPolicy } : {}),
+        ...(theme ? { theme } : {}),
+      },
+      select: SELF_SELECT,
+    });
+    // Re-issue so this device's token picks up the new lifetime right away.
+    const token = sessionPolicy
+      ? await createSession(res, { userId: user.id, name: user.name })
+      : undefined;
+    return res.json({ user: selfUser(user), ...(token ? { token } : {}) });
+  })
+);
+
+// PUT /api/auth/ntfy — save the ntfy topic (and optional self-hosted server)
+// that settlement notifications are pushed to.
+authRouter.put(
+  "/ntfy",
+  requireAuth,
+  ah(async (req, res) => {
+    const r = req as AuthedRequest;
+    const parsed = ntfySchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: zodMessage(parsed.error) });
+    const server = normalizeServer(parsed.data.server);
+    if (server !== DEFAULT_NTFY_SERVER) {
+      const problem = await checkNtfyServer(server);
+      if (problem) return res.status(400).json({ error: problem });
+    }
+    const user = await prisma.user.update({
+      where: { id: r.session.userId },
+      data: {
+        ntfyTopic: parsed.data.topic,
+        ntfyServer: server === DEFAULT_NTFY_SERVER ? null : server,
       },
       select: SELF_SELECT,
     });
     return res.json({ user: selfUser(user) });
+  })
+);
+
+// GET /api/auth/ntfy/suggest — a fresh random topic (for clients without a
+// secure random generator).
+authRouter.get(
+  "/ntfy/suggest",
+  requireAuth,
+  ah(async (_req, res) => {
+    const alphabet = "abcdefghijkmnpqrstuvwxyz23456789";
+    const bytes = randomBytes(16);
+    const topic = `splitplus-${Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("")}`;
+    return res.json({ topic });
+  })
+);
+
+// DELETE /api/auth/ntfy — stop push notifications.
+authRouter.delete(
+  "/ntfy",
+  requireAuth,
+  ah(async (req, res) => {
+    const r = req as AuthedRequest;
+    const user = await prisma.user.update({
+      where: { id: r.session.userId },
+      data: { ntfyTopic: null, ntfyServer: null },
+      select: SELF_SELECT,
+    });
+    return res.json({ user: selfUser(user) });
+  })
+);
+
+// POST /api/auth/ntfy/test — send a sample notification (with banner) to the
+// saved topic, or to the one in the body so it can be tried before saving.
+const lastTest = new Map<string, number>();
+authRouter.post(
+  "/ntfy/test",
+  requireAuth,
+  ah(async (req, res) => {
+    const r = req as AuthedRequest;
+    const me = r.session.userId;
+    const since = Date.now() - (lastTest.get(me) ?? 0);
+    if (since < 10_000) {
+      return res.status(429).json({ error: "Give it a few seconds before testing again." });
+    }
+
+    let target: { topic: string; server: string | null } | null = null;
+    if (req.body && typeof req.body.topic === "string" && req.body.topic.trim()) {
+      const parsed = ntfySchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: zodMessage(parsed.error) });
+      target = { topic: parsed.data.topic, server: parsed.data.server || null };
+    } else {
+      const u = await prisma.user.findUnique({ where: { id: me }, select: { ntfyTopic: true, ntfyServer: true } });
+      if (u?.ntfyTopic) target = { topic: u.ntfyTopic, server: u.ntfyServer };
+    }
+    if (!target) return res.status(400).json({ error: "Add your ntfy topic first." });
+
+    lastTest.set(me, Date.now());
+    const origin = requestOrigin();
+    try {
+      await publish(target, {
+        title: "It works! Split+ notifications are on",
+        message: "You'll get a ping like this when someone pays you, or confirms or declines your payment.",
+        tags: ["tada"],
+        priority: 4,
+        click: origin || undefined,
+        banner: { k: "t", u: me },
+      });
+    } catch (err) {
+      return res.status(502).json({ error: err instanceof NtfyError ? err.message : "Couldn't send the test." });
+    }
+    return res.json({ ok: true });
   })
 );
 
@@ -526,7 +877,7 @@ authRouter.patch(
     }
     const user = await prisma.user.update({
       where: { id: r.session.userId },
-      data: { avatar: avatar || null },
+      data: avatarData(avatar ?? ""),
       select: SELF_SELECT,
     });
     return res.json({ user: selfUser(user) });

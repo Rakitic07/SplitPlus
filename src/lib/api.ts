@@ -224,11 +224,22 @@ async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
   const res = await fetch(`/api${path}`, { ...init, headers, credentials: "include" });
+  // The server slides the session forward on use; keep the Bearer copy in step
+  // with the renewed cookie.
+  const renewed = res.headers.get("x-session-token");
+  if (renewed && token && renewed !== token) setToken(renewed);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
+    if (res.status === 401 && (data as { code?: string }).code === "session") sessionEnded?.();
     throw new ApiError((data as { error?: string }).error ?? "Something went wrong", res.status);
   }
   return data as T;
+}
+
+// Called when the server says the session is gone (revoked or expired).
+let sessionEnded: (() => void) | null = null;
+export function onSessionEnded(fn: (() => void) | null) {
+  sessionEnded = fn;
 }
 
 const body = (v: unknown) => JSON.stringify(v);
@@ -356,18 +367,76 @@ export const api = {
       setToken(null);
     }
   },
+  // Revoke every session of this account, this device included.
+  async logoutAll() {
+    await req("/auth/logout-all", { method: "POST" });
+    setToken(null);
+  },
   async searchUsers(q: string) {
     return req<{ users: PublicUser[] }>(`/auth/search?q=${encodeURIComponent(q)}`);
   },
   async updateSettings(patch: Partial<SettingsInput>) {
-    return req<{ user: SelfUser }>("/auth/settings", {
+    const data = await req<{ user: SelfUser; token?: string }>("/auth/settings", {
       method: "PATCH",
       body: body(patch),
     });
+    if (data.token) setToken(data.token);
+    return data;
   },
   // How many display-name changes are left in the current 30-day window.
   async nameStatus() {
     return req<NameChangeStatus>("/auth/name-status");
+  },
+  // Recovery email: send a code → verify it → saved (also usable to log in).
+  async emailStart(email: string, passphrase: string) {
+    return req<{ ok: true; sentTo: string }>("/auth/email/start", {
+      method: "POST",
+      body: body({ email, passphrase }),
+    });
+  },
+  async emailVerify(code: string) {
+    return req<{ user: SelfUser }>("/auth/email/verify", { method: "POST", body: body({ code }) });
+  },
+  async emailRemove(passphrase: string) {
+    return req<{ user: SelfUser }>("/auth/email/remove", {
+      method: "POST",
+      body: body({ passphrase }),
+    });
+  },
+  async emailResetRequest(identifier: string) {
+    return req<{ ok: true; message: string }>("/auth/email-reset/request", {
+      method: "POST",
+      body: body({ identifier }),
+    });
+  },
+  async emailResetConfirm(identifier: string, code: string, passphrase: string) {
+    return req<{ ok: true; name: string }>("/auth/email-reset/confirm", {
+      method: "POST",
+      body: body({ identifier, code, passphrase }),
+    });
+  },
+  // ntfy push notifications for settlements.
+  async ntfySave(topic: string, server?: string) {
+    return req<{ user: SelfUser }>("/auth/ntfy", { method: "PUT", body: body({ topic, server: server ?? "" }) });
+  },
+  async ntfyRemove() {
+    return req<{ user: SelfUser }>("/auth/ntfy", { method: "DELETE" });
+  },
+  // Without arguments, tests the saved topic.
+  async ntfyTest(topic?: string, server?: string) {
+    return req<{ ok: true }>("/auth/ntfy/test", {
+      method: "POST",
+      body: body(topic ? { topic, server: server ?? "" } : {}),
+    });
+  },
+  // Change the passphrase; signs out every other device, keeps this one.
+  async changePassphrase(current: string, next: string) {
+    const data = await req<{ ok: true; token?: string }>("/auth/passphrase", {
+      method: "POST",
+      body: body({ current, next }),
+    });
+    if (data.token) setToken(data.token);
+    return data;
   },
   // Change the display name (max 2 / 30 days; must be unique).
   async changeName(name: string) {

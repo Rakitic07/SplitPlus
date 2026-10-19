@@ -1,13 +1,40 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAuth } from "./state/auth";
 import { AuthPage } from "./pages/AuthPage";
 import { HomePage } from "./pages/HomePage";
-import { GroupPage } from "./pages/GroupPage";
-import { AdminPage } from "./pages/AdminPage";
-import { JoinPage } from "./pages/JoinPage";
 import { LogoMark } from "./components/Logo";
+
+// A tab left open across a deploy asks for chunk files that no longer exist;
+// reload once to pick up the new build instead of showing a broken screen.
+const CHUNK_RELOAD_KEY = "splitplus_chunk_reload";
+function reloadOnStaleChunk<T>(load: () => Promise<T>): () => Promise<T> {
+  return () =>
+    load().then(
+      (mod) => {
+        sessionStorage.removeItem(CHUNK_RELOAD_KEY);
+        return mod;
+      },
+      (err) => {
+        if (sessionStorage.getItem(CHUNK_RELOAD_KEY)) throw err;
+        sessionStorage.setItem(CHUNK_RELOAD_KEY, "1");
+        window.location.reload();
+        return new Promise<T>(() => {});
+      }
+    );
+}
+
+// Charts (recharts, d3-force) and the admin panel are heavy and not needed for
+// the first screen, so they load as separate chunks.
+const loadGroupPage = reloadOnStaleChunk(() => import("./pages/GroupPage"));
+const GroupPage = lazy(() => loadGroupPage().then((m) => ({ default: m.GroupPage })));
+const AdminPage = lazy(
+  reloadOnStaleChunk(() => import("./pages/AdminPage").then((m) => ({ default: m.AdminPage })))
+);
+const JoinPage = lazy(
+  reloadOnStaleChunk(() => import("./pages/JoinPage").then((m) => ({ default: m.JoinPage })))
+);
 
 // The branded splash — a springy logo pop, a floating/breathing mark, the
 // shimmering wordmark, and a shimmering progress bar. Shown on cold-start while
@@ -22,7 +49,7 @@ function Splash({ overlay = false }: { overlay?: boolean }) {
       transition={{ duration: 0.3 }}
       className={
         overlay
-          ? "fixed inset-0 z-[60] flex min-h-screen flex-col items-center justify-center bg-[#0a0807]"
+          ? "fixed inset-0 z-[60] flex min-h-screen flex-col items-center justify-center bg-app"
           : "flex min-h-screen flex-col items-center justify-center"
       }
     >
@@ -34,13 +61,11 @@ function Splash({ overlay = false }: { overlay?: boolean }) {
         className="relative flex flex-col items-center text-center"
       >
         <div className="pointer-events-none absolute -top-10 h-40 w-40 rounded-full bg-orange-500/25 blur-3xl" />
-        <motion.div
-          animate={{ y: [0, -7, 0], scale: [1, 1.05, 1] }}
-          transition={{ repeat: Infinity, duration: 2.2, ease: "easeInOut" }}
-          className="relative drop-shadow-[0_12px_44px_rgba(255,138,61,0.5)]"
-        >
-          <LogoMark size={78} />
-        </motion.div>
+        <div className="logo-float relative">
+          <div className="drop-shadow-[0_12px_44px_rgba(255,138,61,0.5)]">
+            <LogoMark size={78} />
+          </div>
+        </div>
         <div className="mt-5 text-4xl font-black tracking-tight gradient-text-shimmer">Split+</div>
         <motion.div
           initial={{ opacity: 0 }}
@@ -74,12 +99,19 @@ export default function App() {
     prevStatus.current = status;
   }, [status]);
 
+  // Warm the group screen chunk once signed in, so opening a group is instant.
+  useEffect(() => {
+    if (status !== "authed") return;
+    const t = setTimeout(() => void import("./pages/GroupPage").catch(() => {}), 1200);
+    return () => clearTimeout(t);
+  }, [status]);
+
   if (status === "loading") return <Splash />;
 
   // /admin is a standalone, secret-gated panel — reachable whether or not the
   // visitor is signed in to a normal account.
   return (
-    <>
+    <Suspense fallback={<Splash />}>
       <Routes>
         <Route path="/admin" element={<AdminPage />} />
         {/* Shareable group join links work in BOTH states: a signed-out visitor
@@ -97,6 +129,6 @@ export default function App() {
       </Routes>
 
       <AnimatePresence>{welcome && <Splash key="welcome" overlay />}</AnimatePresence>
-    </>
+    </Suspense>
   );
 }

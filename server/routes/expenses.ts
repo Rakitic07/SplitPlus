@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
+import { imageUrl } from "../lib/images.js";
 import { expenseSchema } from "../../shared/validation.js";
 import { ah, requireAuth, requireMember, zodMessage, type AuthedRequest } from "../lib/http.js";
 import { computeShares, type ShareInput } from "../../shared/split.js";
@@ -7,10 +8,10 @@ import { computeShares, type ShareInput } from "../../shared/split.js";
 // Mounted at /api.
 export const expensesRouter = Router();
 
-const pub = (u: { id: string; name: string; avatar?: string | null }) => ({
+const pub = (u: { id: string; name: string; avatarVer?: string | null }) => ({
   id: u.id,
   name: u.name,
-  avatar: u.avatar ?? null,
+  avatar: imageUrl("u", u.id, u.avatarVer),
 });
 
 type ExpenseRow = {
@@ -23,8 +24,8 @@ type ExpenseRow = {
   notes: string | null;
   splitMode: string;
   createdAt: Date;
-  paidBy: { id: string; name: string; avatar: string | null };
-  createdBy: { id: string; name: string; avatar: string | null };
+  paidBy: { id: string; name: string; avatarVer: string | null };
+  createdBy: { id: string; name: string; avatarVer: string | null };
   shares: { userId: string; amount: number; user: { name: string } }[];
 };
 
@@ -57,8 +58,8 @@ const ROW_SELECT = {
   notes: true,
   splitMode: true,
   createdAt: true,
-  paidBy: { select: { id: true, name: true, avatar: true } },
-  createdBy: { select: { id: true, name: true, avatar: true } },
+  paidBy: { select: { id: true, name: true, avatarVer: true } },
+  createdBy: { select: { id: true, name: true, avatarVer: true } },
   shares: { select: { userId: true, amount: true, user: { select: { name: true } } } },
 } as const;
 
@@ -73,7 +74,7 @@ async function groupMemberIds(groupId: string): Promise<Set<string>> {
 // List a group's expenses (no heavy thumbnails in the payload). Shared by
 // GET /groups/:id/expenses and the combined bootstrap endpoint.
 export async function listExpensesFor(groupId: string) {
-  const [rows, withThumbs] = await prisma.$transaction([
+  const [rows, withThumbs] = await Promise.all([
     prisma.expense.findMany({
       where: { groupId },
       orderBy: [{ date: "desc" }, { createdAt: "desc" }],

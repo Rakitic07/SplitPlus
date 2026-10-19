@@ -1,7 +1,7 @@
 import React from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Avatar } from "./ui";
+import { Avatar, SheetRoot } from "./ui";
 import { theme } from "../theme";
 import type { GroupMember, Role } from "../shared/types";
 
@@ -31,7 +31,7 @@ export function MembersSheet({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.wrap}>
+      <SheetRoot style={styles.wrap}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={[styles.sheet, { paddingBottom: insets.bottom + 20 }]}>
           <Text style={styles.title}>Members · {members.length}</Text>
@@ -57,7 +57,7 @@ export function MembersSheet({
             })}
           </ScrollView>
         </View>
-      </View>
+      </SheetRoot>
     </Modal>
   );
 }

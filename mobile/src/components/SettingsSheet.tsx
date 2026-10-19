@@ -2,12 +2,17 @@ import React, { useEffect, useState } from "react";
 import { Image, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
-import { Avatar, Button, Input, Label } from "./ui";
+import { Avatar, Button, Input, Label, SheetRoot } from "./ui";
+import { NtfySection } from "./NtfySection";
+import { PassphraseSection } from "./PassphraseSection";
+import { RecoveryEmailSection } from "./RecoveryEmailSection";
+import { SessionSection } from "./SessionSection";
+import { ThemeSection } from "./ThemeSection";
 import { api, ApiError, type NameChangeStatus } from "../lib/api";
 import { CURRENCIES } from "../shared/currency";
 import { useAuth } from "../state/auth";
 import { useToast } from "../state/toast";
-import { theme } from "../theme";
+import { theme, raised, inset } from "../theme";
 import type { ReminderFrequency } from "../shared/types";
 
 const FREQ: { value: ReminderFrequency; label: string }[] = [
@@ -121,7 +126,7 @@ export function SettingsSheet({ visible, onClose }: { visible: boolean; onClose:
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.wrap}>
+      <SheetRoot style={styles.wrap}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={[styles.sheet, { paddingBottom: insets.bottom + 20 }]}>
           <Text style={styles.title}>Settings</Text>
@@ -174,6 +179,15 @@ export function SettingsSheet({ visible, onClose }: { visible: boolean; onClose:
             <Text style={[styles.hint, { marginTop: 6 }]}>{nameHint}</Text>
 
             <View style={{ height: 18 }} />
+            <RecoveryEmailSection visible={visible} />
+
+            <View style={{ height: 18 }} />
+            <PassphraseSection visible={visible} />
+
+            <View style={{ height: 18 }} />
+            <ThemeSection />
+
+            <View style={{ height: 18 }} />
             <Label>Default currency</Label>
             <Text style={styles.hint}>Pre-selected when you create a new group.</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingTop: 4 }}>
@@ -219,6 +233,12 @@ export function SettingsSheet({ visible, onClose }: { visible: boolean; onClose:
               </View>
             )}
 
+            <View style={{ height: 18 }} />
+            <NtfySection visible={visible} />
+
+            <View style={{ height: 18 }} />
+            <SessionSection onSignedOut={onClose} />
+
             <Button title="Save changes" onPress={save} loading={busy} style={{ marginTop: 22 }} />
             <Pressable
               onPress={() => {
@@ -231,7 +251,7 @@ export function SettingsSheet({ visible, onClose }: { visible: boolean; onClose:
             </Pressable>
           </ScrollView>
         </View>
-      </View>
+      </SheetRoot>
     </Modal>
   );
 }
@@ -245,14 +265,14 @@ const styles = StyleSheet.create({
   name: { color: "#fff", fontSize: 18, fontWeight: "800" },
   link: { color: theme.colors.primary2, fontWeight: "700", fontSize: 13 },
   hint: { color: theme.colors.textFaint, fontSize: 12, marginBottom: 6 },
-  nameRow: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: "rgba(255,255,255,0.05)", borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderColor: theme.colors.border },
+  nameRow: { flexDirection: "row", alignItems: "center", gap: 12, ...raised("rgba(255,255,255,0.05)"), borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderColor: theme.colors.border },
   nameVal: { color: "#fff", fontWeight: "800", fontSize: 15, flex: 1 },
   nameEdit: { color: theme.colors.primary2, fontWeight: "800", fontSize: 13 },
-  cur: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.06)" },
+  cur: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, ...raised("rgba(255,255,255,0.06)") },
   curActive: { backgroundColor: "rgba(255,255,255,0.2)", borderWidth: 1, borderColor: "rgba(255,255,255,0.5)" },
-  toggleRow: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: "rgba(255,255,255,0.05)", borderRadius: 18, padding: 14, borderWidth: 1, borderColor: theme.colors.border },
+  toggleRow: { flexDirection: "row", alignItems: "center", gap: 12, ...raised("rgba(255,255,255,0.05)"), borderRadius: 18, padding: 14, borderWidth: 1, borderColor: theme.colors.border },
   toggleTitle: { color: "#fff", fontWeight: "700", fontSize: 15 },
-  freqRow: { flexDirection: "row", gap: 6, marginTop: 10, backgroundColor: "rgba(0,0,0,0.25)", borderRadius: 14, padding: 4 },
+  freqRow: { flexDirection: "row", gap: 6, marginTop: 10, ...inset("rgba(0,0,0,0.25)"), borderRadius: 14, padding: 4 },
   freq: { flex: 1, paddingVertical: 10, alignItems: "center", borderRadius: 10 },
-  freqActive: { backgroundColor: "rgba(255,255,255,0.15)" },
+  freqActive: { ...raised("rgba(255,255,255,0.15)") },
 });

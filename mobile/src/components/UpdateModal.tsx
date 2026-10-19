@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { theme } from "../theme";
+import { theme, inset } from "../theme";
 import { useToast } from "../state/toast";
 import { downloadAndInstall, openInBrowser } from "../lib/appUpdate";
 import type { AndroidRelease } from "../shared/appVersion";
@@ -128,7 +128,7 @@ const styles = StyleSheet.create({
   laterTxt: { color: theme.colors.textDim, fontWeight: "700" },
   update: { paddingVertical: 14, borderRadius: 16, alignItems: "center", justifyContent: "center" },
   updateTxt: { color: "#fff", fontWeight: "800", fontSize: 15 },
-  track: { height: 10, borderRadius: 6, backgroundColor: "rgba(255,255,255,0.1)", overflow: "hidden" },
+  track: { height: 10, borderRadius: 6, ...inset("rgba(255,255,255,0.1)"), overflow: "hidden" },
   fill: { height: "100%", borderRadius: 6 },
   pct: { color: theme.colors.textDim, fontSize: 12, textAlign: "center", marginTop: 10, fontWeight: "600" },
 });

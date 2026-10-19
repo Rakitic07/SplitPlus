@@ -19,13 +19,20 @@ import { round2 } from "../../shared/split.js";
 import type { PublicUser } from "../../shared/types.js";
 import { listExpensesFor } from "./expenses.js";
 import { listSettlementsFor } from "./settlements.js";
+import { imageUrl, thumbData } from "../lib/images.js";
 
 export const groupsRouter = Router();
 
-const publicUser = (u: { id: string; name: string; avatar?: string | null }): PublicUser => ({
+const publicUser = (u: { id: string; name: string; avatarVer?: string | null }): PublicUser => ({
   id: u.id,
   name: u.name,
-  avatar: u.avatar ?? null,
+  avatar: imageUrl("u", u.id, u.avatarVer),
+});
+
+const GROUP_CARD_SELECT = { id: true, name: true, emoji: true, thumbVer: true, currency: true } as const;
+const groupCard = ({ thumbVer, ...g }: { id: string; name: string; emoji: string | null; thumbVer: string | null; currency: string }) => ({
+  ...g,
+  thumbnail: imageUrl("g", g.id, thumbVer),
 });
 
 // Load full net balances (and members) for a group.
@@ -33,7 +40,7 @@ async function loadBalances(groupId: string) {
   const [members, expenses, settlements] = await Promise.all([
     prisma.membership.findMany({
       where: { groupId },
-      select: { role: true, user: { select: { id: true, name: true, avatar: true } } },
+      select: { role: true, user: { select: { id: true, name: true, avatarVer: true } } },
       orderBy: { joinedAt: "asc" },
     }),
     prisma.expense.findMany({
@@ -67,7 +74,7 @@ export async function listGroupsFor(userId: string) {
           id: true,
           name: true,
           emoji: true,
-          thumbnail: true,
+          thumbVer: true,
           currency: true,
           _count: { select: { members: true } },
         },
@@ -83,7 +90,9 @@ export async function listGroupsFor(userId: string) {
   for (const id of groupIds) net.set(id, 0);
 
   if (groupIds.length > 0) {
-    const [myPaid, myShares, mySettlements] = await prisma.$transaction([
+    // Plain reads, not $transaction: through the pgbouncer pooler a transaction
+    // costs two extra round trips (BEGIN/COMMIT) for no consistency benefit here.
+    const [myPaid, myShares, mySettlements] = await Promise.all([
       prisma.expense.findMany({
         where: { groupId: { in: groupIds }, paidById: me },
         select: { groupId: true, amount: true },
@@ -118,7 +127,7 @@ export async function listGroupsFor(userId: string) {
     id: m.group.id,
     name: m.group.name,
     emoji: m.group.emoji,
-    thumbnail: m.group.thumbnail,
+    thumbnail: imageUrl("g", m.group.id, m.group.thumbVer),
     currency: m.group.currency,
     role: m.role as "owner" | "member",
     memberCount: m.group._count.members,
@@ -152,11 +161,11 @@ groupsRouter.post(
         name,
         currency: currency || "INR",
         emoji: emoji || null,
-        thumbnail: thumbnail || null,
+        ...thumbData(thumbnail),
         createdById: r.session.userId,
         members: { create: { userId: r.session.userId, role: "owner" } },
       },
-      select: { id: true, name: true, emoji: true, thumbnail: true, currency: true },
+      select: GROUP_CARD_SELECT,
     });
 
     // Send invites to any valid, distinct users (never the creator).
@@ -183,7 +192,7 @@ groupsRouter.post(
     }
 
     return res.status(201).json({
-      group: { ...group, role: "owner", memberCount: 1, net: 0 },
+      group: { ...groupCard(group), role: "owner", memberCount: 1, net: 0 },
       invited,
     });
   })
@@ -198,12 +207,12 @@ async function groupDetailFor(groupId: string, membershipRole: MemberRole | unde
       id: true,
       name: true,
       emoji: true,
-      thumbnail: true,
+      thumbVer: true,
       currency: true,
       createdAt: true,
-      createdBy: { select: { id: true, name: true, avatar: true } },
+      createdBy: { select: { id: true, name: true, avatarVer: true } },
       members: {
-        select: { role: true, user: { select: { id: true, name: true, avatar: true } } },
+        select: { role: true, user: { select: { id: true, name: true, avatarVer: true } } },
         orderBy: { joinedAt: "asc" },
       },
     },
@@ -213,7 +222,7 @@ async function groupDetailFor(groupId: string, membershipRole: MemberRole | unde
     id: group.id,
     name: group.name,
     emoji: group.emoji,
-    thumbnail: group.thumbnail,
+    thumbnail: imageUrl("g", group.id, group.thumbVer),
     currency: group.currency,
     createdAt: group.createdAt,
     createdBy: group.createdBy ? publicUser(group.createdBy) : null,
@@ -256,11 +265,11 @@ groupsRouter.patch(
         ...(data.name !== undefined ? { name: data.name } : {}),
         ...(data.currency ? { currency: data.currency } : {}),
         ...(data.emoji !== undefined ? { emoji: data.emoji || null } : {}),
-        ...(data.thumbnail !== undefined ? { thumbnail: data.thumbnail || null } : {}),
+        ...thumbData(data.thumbnail),
       },
-      select: { id: true, name: true, emoji: true, thumbnail: true, currency: true },
+      select: GROUP_CARD_SELECT,
     });
-    return res.json({ group });
+    return res.json({ group: groupCard(group) });
   })
 );
 
@@ -323,11 +332,11 @@ groupsRouter.get(
 // roles). Shared by GET /groups/:id/stats and the combined bootstrap endpoint.
 // Returns null if the group vanished.
 async function groupStatsFor(groupId: string, membershipRole: MemberRole | undefined, me: string) {
-    const [group, members, expenses, settlements] = await prisma.$transaction([
+    const [group, members, expenses, settlements] = await Promise.all([
       prisma.group.findUnique({ where: { id: groupId }, select: { createdAt: true } }),
       prisma.membership.findMany({
         where: { groupId },
-        select: { user: { select: { id: true, name: true, avatar: true } } },
+        select: { user: { select: { id: true, name: true, avatarVer: true } } },
       }),
       prisma.expense.findMany({
         where: { groupId },
@@ -409,7 +418,7 @@ async function groupStatsFor(groupId: string, membershipRole: MemberRole | undef
         .map((m) => ({
           id: m.user.id,
           name: m.user.name,
-          avatar: m.user.avatar ?? null,
+          avatar: imageUrl("u", m.user.id, m.user.avatarVer),
           paid: paidBy.get(m.user.id) ?? 0,
           share: shareBy.get(m.user.id) ?? 0,
           net: (paidBy.get(m.user.id) ?? 0) - (shareBy.get(m.user.id) ?? 0),

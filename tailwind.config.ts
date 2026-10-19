@@ -20,6 +20,9 @@ const config: Config = {
         ],
       },
       colors: {
+        // Theme-driven surfaces (see --app-bg / --panel-bg in index.css).
+        app: "rgb(var(--app-bg) / <alpha-value>)",
+        panel: "rgb(var(--panel-bg) / <alpha-value>)",
         glass: {
           DEFAULT: "rgba(255,255,255,0.12)",
           strong: "rgba(255,255,255,0.22)",

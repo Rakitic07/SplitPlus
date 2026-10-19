@@ -2,13 +2,13 @@ import React, { useEffect, useState } from "react";
 import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
-import { Button, Input, Label } from "./ui";
+import { Button, Input, Label, SheetRoot } from "./ui";
 import { ImageCropper } from "./ImageCropper";
 import { api, ApiError } from "../lib/api";
 import { CURRENCIES } from "../shared/currency";
 import { GROUP_EMOJIS } from "../shared/categories";
 import { useToast } from "../state/toast";
-import { theme } from "../theme";
+import { theme, raised } from "../theme";
 import type { GroupDetail, GroupSummary } from "../shared/types";
 
 // Owners & moderators can change the group name, emoji, currency and cover photo
@@ -93,7 +93,7 @@ export function EditGroupSheet({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.wrap}>
+      <SheetRoot style={styles.wrap}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={[styles.sheet, { paddingBottom: insets.bottom + 20 }]}>
           <Text style={styles.title}>Edit group</Text>
@@ -162,7 +162,7 @@ export function EditGroupSheet({
             <Button title="Save changes" onPress={save} loading={busy} style={{ marginTop: 20 }} />
           </ScrollView>
         </View>
-      </View>
+      </SheetRoot>
 
       <ImageCropper
         visible={cropOpen}
@@ -182,12 +182,12 @@ const styles = StyleSheet.create({
   wrap: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.5)" },
   sheet: { backgroundColor: theme.colors.bgElevated, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, maxHeight: "88%" },
   title: { color: "#fff", fontSize: 20, fontWeight: "800", marginBottom: 16 },
-  cover: { height: 120, borderRadius: 18, borderWidth: 1, borderColor: theme.colors.border, borderStyle: "dashed", alignItems: "center", justifyContent: "center", overflow: "hidden", marginBottom: 10, backgroundColor: "rgba(255,255,255,0.05)" },
+  cover: { height: 120, borderRadius: 18, borderWidth: 1, borderColor: theme.colors.border, borderStyle: "dashed", alignItems: "center", justifyContent: "center", overflow: "hidden", marginBottom: 10, ...raised("rgba(255,255,255,0.05)") },
   coverEdit: { position: "absolute", right: 10, bottom: 10, backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
   coverActions: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 },
-  coverBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: "rgba(255,255,255,0.06)", borderWidth: 1, borderColor: theme.colors.border },
+  coverBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, ...raised("rgba(255,255,255,0.06)"), borderWidth: 1, borderColor: theme.colors.border },
   coverBtnTxt: { color: theme.colors.textDim, fontWeight: "700", fontSize: 12 },
-  emoji: { width: 42, height: 42, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.06)", alignItems: "center", justifyContent: "center" },
-  cur: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.06)" },
+  emoji: { width: 42, height: 42, borderRadius: 12, ...raised("rgba(255,255,255,0.06)"), alignItems: "center", justifyContent: "center" },
+  cur: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, ...raised("rgba(255,255,255,0.06)") },
   active: { backgroundColor: "rgba(255,255,255,0.2)", borderWidth: 1, borderColor: "rgba(255,255,255,0.5)" },
 });

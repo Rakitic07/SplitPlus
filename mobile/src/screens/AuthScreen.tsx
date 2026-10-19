@@ -16,7 +16,7 @@ import { RecoverSheet } from "../components/RecoverSheet";
 import { useAuth } from "../state/auth";
 import { useToast } from "../state/toast";
 import { ApiError } from "../lib/api";
-import { theme } from "../theme";
+import { theme, inset, raised } from "../theme";
 import type { SelfUser } from "../shared/types";
 
 type Mode = "login" | "register";
@@ -42,8 +42,8 @@ export function AuthScreen() {
     setBusy(true);
     try {
       if (mode === "login") {
-        await login(name.trim(), pass);
-        success(`Welcome back, ${name.trim()}!`);
+        const u = await login(name.trim(), pass);
+        success(`Welcome back, ${u.name}!`);
       } else {
         const { user, recoveryCode } = await register(name.trim(), pass);
         setPendingUser(user);
@@ -101,8 +101,17 @@ export function AuthScreen() {
             ))}
           </View>
 
-          <Label>Your name</Label>
-          <Input value={name} onChangeText={setName} placeholder="e.g. Raktim" autoCapitalize="words" />
+          <Label>{mode === "login" ? "Your name or email" : "Your name"}</Label>
+          <Input
+            value={name}
+            onChangeText={setName}
+            placeholder={mode === "login" ? "e.g. Raktim or you@example.com" : "e.g. Raktim"}
+            autoCapitalize={mode === "login" ? "none" : "words"}
+            autoCorrect={false}
+          />
+          {mode === "login" && (
+            <Text style={styles.tiny}>Email works only if you've added it in Settings.</Text>
+          )}
 
           <View style={{ height: 12 }} />
           <Label>Passphrase</Label>
@@ -123,7 +132,7 @@ export function AuthScreen() {
         </Card>
 
         <Text style={styles.footer}>
-          No email needed. Your name + passphrase is your account — invite friends by their name.
+          No email needed. Your name + passphrase is your account — add a recovery email in Settings if you like.
         </Text>
 
         <AppFooter />
@@ -138,9 +147,9 @@ const styles = StyleSheet.create({
   center: { flexGrow: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 20 },
   brand: { fontSize: 48, fontWeight: "900", color: "#fff", letterSpacing: -1 },
   tagline: { color: theme.colors.textDim, textAlign: "center", marginTop: 8, maxWidth: 320 },
-  tabs: { flexDirection: "row", backgroundColor: "rgba(0,0,0,0.25)", borderRadius: 16, padding: 4, marginBottom: 16 },
+  tabs: { flexDirection: "row", ...inset("rgba(0,0,0,0.25)"), borderRadius: 16, padding: 4, marginBottom: 16 },
   tab: { flex: 1, paddingVertical: 10, alignItems: "center", borderRadius: 12 },
-  tabActive: { backgroundColor: "rgba(255,255,255,0.15)" },
+  tabActive: { ...raised("rgba(255,255,255,0.15)") },
   tabText: { color: theme.colors.textFaint, fontWeight: "700" },
   footer: { color: theme.colors.textFaint, fontSize: 12, textAlign: "center", marginTop: 20, maxWidth: 340 },
   forgot: { color: theme.colors.textDim, fontSize: 13, fontWeight: "600", textDecorationLine: "underline" },
