@@ -4,11 +4,14 @@ import { motion } from "framer-motion";
 import {
   Area,
   AreaChart,
+  Bar,
+  BarChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
 } from "recharts";
 import {
+  Activity,
   BarChart3,
   Check,
   Cpu,
@@ -33,6 +36,7 @@ import { CURRENCIES } from "@shared/currency";
 import {
   api,
   ApiError,
+  type AdminDbUsage,
   type AdminGroup,
   type AdminMetrics,
   type AdminResetRequest,
@@ -244,6 +248,133 @@ function StorageView({ s }: { s: NonNullable<AdminMetrics["storage"]> }) {
           </div>
         )}
       </div>
+    </Card>
+  );
+}
+
+// ── database usage (Neon compute hours + API requests) ───────────────────
+function DbUsageView({
+  u,
+  onRefresh,
+  refreshing,
+}: {
+  u: AdminDbUsage;
+  onRefresh: () => void;
+  refreshing: boolean;
+}) {
+  const n = u.neon;
+  const r = u.requests;
+  const fmtDate = (s?: string) => (s ? new Date(s).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : "—");
+  const projected = n.projectedCuHours ?? null;
+  const overPace = projected !== null && projected > n.limitCuHours;
+
+  return (
+    <Card className="p-4">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <SectionTitle icon={<Activity className="h-4 w-4" />}>Database usage</SectionTitle>
+        {n.configured && (
+          <button
+            onClick={onRefresh}
+            title="Reads the Neon API only — does not wake the database"
+            className="-mt-3 flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-white/60 transition hover:bg-white/10"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} /> Hours
+          </button>
+        )}
+      </div>
+
+      {!n.configured ? (
+        <p className="text-sm text-white/50">
+          Set <code className="text-white/80">NEON_API_KEY</code> and <code className="text-white/80">NEON_PROJECT_ID</code> in
+          the server environment to see compute hours.
+        </p>
+      ) : n.error ? (
+        <p className="text-sm text-rose-300">{n.error}</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Stat
+              label="CU-hours used"
+              value={fmtDec(n.cuHours ?? 0)}
+              sub={`of ${n.limitCuHours} this cycle`}
+              accent={(n.cuHours ?? 0) / n.limitCuHours > 0.85 ? "text-rose-300" : "text-orange-300"}
+            />
+            <Stat label="Hours awake" value={fmtDec(n.activeHours ?? 0)} sub="wall-clock" />
+            <Stat
+              label="Month-end pace"
+              value={projected !== null ? fmtDec(projected) : "—"}
+              sub="projected CU-hours"
+              accent={overPace ? "text-rose-300" : "text-emerald-400"}
+            />
+            <Stat
+              label="Compute now"
+              value={n.compute?.state === "active" ? "Awake" : n.compute ? "Asleep" : "—"}
+              sub={n.compute ? `${n.compute.minCu}–${n.compute.maxCu} CU` : undefined}
+              accent={n.compute?.state === "active" ? "text-amber-300" : "text-emerald-400"}
+            />
+          </div>
+          <div className="mt-4">
+            <Meter
+              label={`Cycle ${fmtDate(n.periodStart)} – ${fmtDate(n.periodEnd)}`}
+              used={n.cuHours ?? 0}
+              total={n.limitCuHours}
+              sub={`${fmtDec(n.cuHours ?? 0)} / ${n.limitCuHours} CU-hours · resets ${fmtDate(n.periodEnd)}`}
+            />
+          </div>
+          {n.compute && n.compute.maxCu > 0.25 && (
+            <p className="mt-3 text-xs text-amber-300/90">
+              Autoscaling max is {n.compute.maxCu} CU — each awake hour can cost up to {n.compute.maxCu / 0.25}× more.
+              Set max to 0.25 CU in Neon to stretch the free quota.
+            </p>
+          )}
+          {overPace && (
+            <p className="mt-2 text-xs text-rose-300/90">
+              At the current pace this cycle will exceed the free quota. Check for pingers hitting DB endpoints.
+            </p>
+          )}
+        </>
+      )}
+
+      {r && (
+        <div className="mt-5">
+          <div className="mb-2 grid grid-cols-3 gap-3">
+            <Stat label="Requests 24h" value={fmtNum(r.last24h)} />
+            <Stat label="Requests 7d" value={fmtNum(r.last7d)} />
+            <Stat label="This cycle" value={fmtNum(r.periodTotal)} />
+          </div>
+          <div className="h-32 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={r.hourly} margin={{ top: 6, right: 6, left: 6, bottom: 0 }}>
+                <XAxis
+                  dataKey="hour"
+                  tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 10 }}
+                  tickFormatter={(h: string) => new Date(h).toLocaleTimeString(undefined, { hour: "numeric" })}
+                  axisLine={false}
+                  tickLine={false}
+                  minTickGap={20}
+                />
+                <Tooltip
+                  cursor={{ fill: "rgba(255,255,255,0.05)" }}
+                  contentStyle={{
+                    background: "#1c1710",
+                    border: "1px solid rgba(255,255,255,0.15)",
+                    borderRadius: 12,
+                    color: "#fff",
+                  }}
+                  labelStyle={{ color: "rgba(255,255,255,0.6)" }}
+                  labelFormatter={(h: string) => new Date(h).toLocaleString(undefined, { hour: "numeric", day: "numeric", month: "short" })}
+                  formatter={(v: number) => [fmtNum(v), "requests"]}
+                />
+                <Bar dataKey="count" fill="#a78bfa" radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <p className="mt-1 text-xs text-white/35">API requests per hour, last 24 hours.</p>
+        </div>
+      )}
+      {u.requests === null && (
+        <p className="mt-3 text-xs text-white/40">Request counts unavailable — run the schema push to create the ApiUsage table.</p>
+      )}
     </Card>
   );
 }
@@ -858,14 +989,16 @@ export function AdminPage() {
   const [requests, setRequests] = useState<AdminResetRequest[]>([]);
   const [loading, setLoading] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [usage, setUsage] = useState<AdminDbUsage | null>(null);
+  const [usageLoading, setUsageLoading] = useState(false);
 
+  // db-usage never fails on DB errors, so it doubles as the secret check and
+  // keeps the panel usable while the database itself is unreachable.
   const load = useCallback(
     async (s: string) => {
       setLoading(true);
       try {
-        const [m, r] = await Promise.all([api.adminMetrics(s), api.adminListResets(s)]);
-        setMetrics(m);
-        setRequests(r.requests);
+        setUsage(await api.adminDbUsage(s, true));
         setAuthed(true);
         try {
           sessionStorage.setItem(SECRET_KEY, s);
@@ -875,12 +1008,34 @@ export function AdminPage() {
       } catch (err) {
         setAuthed(false);
         error(err instanceof ApiError ? err.message : "Couldn't load the dashboard");
+        setLoading(false);
+        return;
+      }
+      try {
+        const [m, r] = await Promise.all([api.adminMetrics(s), api.adminListResets(s)]);
+        setMetrics(m);
+        setRequests(r.requests);
+      } catch (err) {
+        setMetrics(null);
+        error(err instanceof ApiError ? err.message : "Couldn't load metrics — the database may be unreachable");
       } finally {
         setLoading(false);
       }
     },
     [error]
   );
+
+  async function refreshUsage() {
+    setUsageLoading(true);
+    try {
+      const u = await api.adminDbUsage(secret, false);
+      setUsage((prev) => ({ ...u, requests: prev?.requests }));
+    } catch (err) {
+      error(err instanceof ApiError ? err.message : "Couldn't refresh usage");
+    } finally {
+      setUsageLoading(false);
+    }
+  }
 
   useEffect(() => {
     const saved = (() => {
@@ -988,11 +1143,16 @@ export function AdminPage() {
             </Card>
           </div>
         ) : tab === "overview" ? (
-          metrics ? (
-            <MetricsView m={metrics} />
-          ) : (
-            <div className="pt-10 text-center text-white/40">Loading metrics…</div>
-          )
+          <div className="space-y-6">
+            {usage && <DbUsageView u={usage} onRefresh={refreshUsage} refreshing={usageLoading} />}
+            {metrics ? (
+              <MetricsView m={metrics} />
+            ) : (
+              <div className="pt-10 text-center text-white/40">
+                {loading ? "Loading metrics…" : "Metrics unavailable — the database couldn't be reached."}
+              </div>
+            )}
+          </div>
         ) : tab === "users" ? (
           <UsersView secret={secret} />
         ) : tab === "groups" ? (

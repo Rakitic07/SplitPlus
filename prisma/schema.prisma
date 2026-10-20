@@ -231,3 +231,9 @@ model ResetRequest {
 
   @@index([status])
 }
+
+// API requests per UTC hour, for the admin "Database usage" panel.
+model ApiUsage {
+  hour     DateTime @id
+  requests Int      @default(0)
+}

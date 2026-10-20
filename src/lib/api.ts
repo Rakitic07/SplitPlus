@@ -141,6 +141,35 @@ export type AdminMetrics = {
   };
 };
 
+// Neon compute usage for the billing period plus API request counts.
+export type AdminDbUsage = {
+  neon: {
+    configured: boolean;
+    error?: string;
+    periodStart?: string;
+    periodEnd?: string;
+    cuHours?: number;
+    activeHours?: number;
+    limitCuHours: number;
+    projectedCuHours?: number | null;
+    dataTransferBytes?: number;
+    compute?: {
+      state: string;
+      lastActive: string | null;
+      minCu: number;
+      maxCu: number;
+      suspendSeconds: number;
+    } | null;
+  };
+  requests?: {
+    last24h: number;
+    last7d: number;
+    periodTotal: number;
+    hourly: { hour: string; count: number }[];
+    daily: { date: string; count: number }[];
+  } | null;
+};
+
 // A reset request as seen by an admin in the admin panel.
 export type AdminResetRequest = {
   id: string;
@@ -307,6 +336,13 @@ export const api = {
   // ── Admin ─────────────────────────────────────────────────────────────
   async adminMetrics(secret: string) {
     return req<AdminMetrics>("/admin/metrics", { headers: { "x-admin-secret": secret } });
+  },
+  // `withRequests` reads request counts from the DB; without it only the Neon
+  // API is called, which doesn't wake the database.
+  async adminDbUsage(secret: string, withRequests: boolean) {
+    return req<AdminDbUsage>(`/admin/db-usage${withRequests ? "?requests=1" : ""}`, {
+      headers: { "x-admin-secret": secret },
+    });
   },
   async adminListResets(secret: string) {
     return req<{ requests: AdminResetRequest[] }>("/admin/reset-requests", {

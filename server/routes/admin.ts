@@ -8,6 +8,7 @@ import {
   adminUserPatchSchema,
 } from "../../shared/validation.js";
 import { ah, zodMessage } from "../lib/http.js";
+import { neonUsage, requestStats } from "../lib/usage.js";
 
 export const adminRouter = Router();
 
@@ -467,6 +468,19 @@ adminRouter.get(
         region: process.env.VERCEL_REGION ?? process.env.AWS_REGION ?? null,
       },
     });
+  })
+);
+
+// GET /api/admin/db-usage — Neon compute hours for the billing period (from the
+// Neon API, which never wakes the database). `?requests=1` adds the API request
+// counts, which are read from the DB.
+adminRouter.get(
+  "/db-usage",
+  ah(async (req, res) => {
+    const neon = await neonUsage();
+    const withRequests = req.query.requests === "1";
+    const since = neon.periodStart ? new Date(neon.periodStart) : new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1));
+    return res.json({ neon, requests: withRequests ? await requestStats(since) : undefined });
   })
 );
 

@@ -1,5 +1,4 @@
 import express from "express";
-import { prisma } from "./lib/prisma.js";
 import { authRouter } from "./routes/auth.js";
 import { groupsRouter } from "./routes/groups.js";
 import { invitesRouter } from "./routes/invites.js";
@@ -13,34 +12,22 @@ import { joinRouter } from "./routes/join.js";
 import { imgRouter } from "./routes/img.js";
 import { ntfyRouter } from "./routes/ntfy.js";
 import { imageOrigin } from "./lib/images.js";
+import { countRequests } from "./lib/usage.js";
 
 const app = express();
 
 // Base64 receipt/avatar thumbnails ride inside the JSON body, so allow a few MB.
 app.use(express.json({ limit: "4mb" }));
 
-// Health check that ALSO issues a trivial DB query. Point an external uptime
-// pinger (e.g. cron-job.org / UptimeRobot) at this every ~3-4 min so the
-// serverless function AND the Neon compute stay warm — this is what kills the
-// 3-5s "scale-to-zero" cold start users feel on the first load after idle.
-app.get("/api/health", async (_req, res) => {
-  const t0 = Date.now();
-  let db = false;
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-    db = true;
-  } catch {
-    db = false;
-  }
-  res.json({
-    ok: true,
-    service: "split-plus",
-    db,
-    dbMs: Date.now() - t0,
-    time: new Date().toISOString(),
-  });
+// Keep-warm / uptime endpoint. It must never touch the database: pingers hit it
+// every few minutes, and any query here would stop Neon's free-plan compute from
+// ever scaling to zero (24/7 awake ≈ 186 CU-hours/month vs. the 100 included).
+// Neon itself wakes in a few hundred ms on the first real query.
+app.get("/api/health", (_req, res) => {
+  res.json({ ok: true, service: "split-plus", time: new Date().toISOString() });
 });
 
+app.use("/api", countRequests);
 app.use("/api", imgRouter);
 app.use("/api", ntfyRouter);
 app.use("/api", imageOrigin);

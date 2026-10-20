@@ -83,8 +83,8 @@ export function onSessionEnded(fn: (() => void) | null) {
 }
 
 // Fire-and-forget warm-up ping. Called on app launch so the serverless function
-// and database are waking up while the user navigates, cutting the first real
-// request's cold-start wait. Never throws.
+// is waking up while the user navigates, cutting the first real request's
+// cold-start wait. /health never touches the database. Never throws.
 export async function warmBackend(): Promise<void> {
   try {
     const controller = new AbortController();
