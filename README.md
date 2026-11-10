@@ -16,7 +16,8 @@ deployable to **Vercel** as a static SPA + serverless function.
 
 - **No-email accounts** — your name + passphrase is your login. A one-time **recovery
   code** is shown at sign-up; forget your passphrase and you can recover via the code,
-  knowledge-based verification, or an admin-approved reset.
+  knowledge-based verification, or an admin-approved reset. Users can optionally add a
+  verified **recovery email** to reset their passphrase by email.
 - **Groups with invites** — search a friend by the first 3 letters of their name and
   invite them. Invites stay **pending** until accepted; share invites over **WhatsApp**
   or a copyable link too.
@@ -77,7 +78,11 @@ but set your own for anything shared):
 AUTH_SECRET="a-long-random-value"       # signs session JWTs
 # ADMIN_SECRET="separate-admin-secret"  # optional; falls back to AUTH_SECRET
 # DATABASE_URL / DIRECT_URL             # PostgreSQL — production (Vercel) only
+# GMAIL_USER / GMAIL_APP_PASSWORD       # optional; recovery & reset emails (see below)
 ```
+
+Without any email settings, local dev prints recovery/reset emails (with their codes)
+to the API console instead of sending them.
 
 Generate a strong secret:
 
@@ -164,6 +169,54 @@ Visit **`/admin`** (e.g. http://localhost:5173/admin) and unlock with your
 - Set `DATABASE_URL` (pooled Neon connection with `pgbouncer=true`), `DIRECT_URL`,
   `AUTH_SECRET`, and optionally `ADMIN_SECRET` in Vercel project settings.
 - Run `npm run db:push` once against your PostgreSQL instance.
+- To send recovery/reset emails, configure Gmail SMTP (below) — in production the
+  email features refuse to run without a mail provider.
+
+---
+
+## 📧 Email (recovery & passphrase reset)
+
+The server sends the "Confirm your recovery email" and "Reset your passphrase" mails.
+The web app, the installed PWA and the mobile app all go through this same API, so
+one server-side setup covers every client.
+
+### Gmail SMTP (recommended — no domain needed)
+
+Mail is sent from your own Gmail account to any recipient (Gmail allows ~500
+messages/day on a personal account).
+
+1. **Turn on 2-Step Verification** for the Gmail account:
+   [myaccount.google.com/security](https://myaccount.google.com/security). App
+   passwords are only offered once it's on.
+2. **Create an App password** at
+   [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords) —
+   name it e.g. "Split+" and copy the 16-character password. This is *not* your Gmail
+   password; it only allows sending mail and can be revoked any time from that page.
+3. **Set the environment variables** — in Vercel under *Project → Settings →
+   Environment Variables* (and in your local `.env` if you want real mail in dev):
+
+   ```bash
+   GMAIL_USER="you@gmail.com"
+   GMAIL_APP_PASSWORD="your-16-char-app-password"   # spaces are fine
+   ```
+
+4. **Redeploy** (environment changes only apply to new deployments), then add a
+   recovery email in the app's settings to test. The first few mails may land in
+   Spam — marking one "Not spam" helps.
+
+Mail goes out over SMTPS (`smtp.gmail.com:465`) with TLS 1.3 and full certificate
+verification. If the app password is wrong or revoked, users see a generic error and
+the Vercel function logs show `[mail] gmail send failed EAUTH …`.
+
+### Resend (alternative — needs your own domain)
+
+Used only when the Gmail variables are **not** set. Set `RESEND_API_KEY` and
+`EMAIL_FROM` (e.g. `Split+ <no-reply@yourdomain.com>`) with a domain verified in
+Resend. Without a verified domain, Resend's test sender can only deliver to the
+Resend account owner's own address — everyone else's mail is rejected.
+
+> Credentials are only ever read from environment variables — never commit them.
+> `.env.example` lists the variable names with empty values.
 
 ---
 

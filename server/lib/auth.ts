@@ -92,7 +92,9 @@ export function clearSession(res: Response): void {
   );
 }
 
-async function readClaims(req: Request): Promise<Claims | null> {
+// Every correctly signed token on the request: the Bearer header (native, and
+// the web's localStorage copy) first, then the cookie (web).
+async function readAllClaims(req: Request): Promise<Claims[]> {
   const authz = req.headers.authorization;
   const bearer =
     authz && authz.toLowerCase().startsWith("bearer ")
@@ -100,40 +102,51 @@ async function readClaims(req: Request): Promise<Claims | null> {
       : null;
 
   const cookies = req.headers.cookie ? parse(req.headers.cookie) : {};
-  // A stale Bearer copy must not shadow a still-valid cookie (web sends both).
-  for (const token of [bearer, cookies[COOKIE_NAME]]) {
+  const cookie = cookies[COOKIE_NAME];
+  const out: Claims[] = [];
+  for (const token of bearer === cookie ? [bearer] : [bearer, cookie]) {
     if (!token) continue;
     try {
       const { payload } = await jwtVerify(token, getSecret());
       if (typeof payload.userId === "string" && typeof payload.name === "string") {
-        return {
+        out.push({
           userId: payload.userId,
           name: payload.name,
           // Tokens minted before session versions existed count as version 0.
           sv: typeof payload.sv === "number" ? payload.sv : 0,
           iat: typeof payload.iat === "number" ? payload.iat : 0,
-        };
+        });
       }
     } catch {
       /* try the next token */
     }
   }
-  return null;
+  return out;
 }
 
 // Verify the JWT from the Bearer header (native) or the cookie (web). Does NOT
 // touch the DB — cheap, for endpoints that only need the id.
 export async function readSession(req: Request): Promise<Session | null> {
-  const c = await readClaims(req);
+  const [c] = await readAllClaims(req);
   return c ? { userId: c.userId, name: c.name } : null;
 }
 
 // Like readSession, but also confirms the user still exists and the token
 // hasn't been revoked ("log out of all devices"). When `res` is given, a token
 // older than a day is transparently renewed so active users never expire.
+// Each presented token is checked against the DB, so a revoked Bearer copy left
+// in the web app's storage can't shadow the fresh cookie set at login.
 export async function getActiveUser(req: Request, res?: Response): Promise<Session | null> {
-  const claims = await readClaims(req);
-  if (!claims) return null;
+  const all = await readAllClaims(req);
+  for (let i = 0; i < all.length; i++) {
+    // Falling back past a revoked Bearer token: re-issue so the client replaces it.
+    const session = await activeSession(all[i], res, i > 0);
+    if (session) return session;
+  }
+  return null;
+}
+
+async function activeSession(claims: Claims, res: Response | undefined, reissue: boolean): Promise<Session | null> {
   const user = await prisma.user.findUnique({
     where: { id: claims.userId },
     select: { id: true, name: true, sessionVersion: true, sessionPolicy: true },
@@ -142,7 +155,7 @@ export async function getActiveUser(req: Request, res?: Response): Promise<Sessi
 
   const session = { userId: user.id, name: user.name };
   const age = Math.floor(Date.now() / 1000) - claims.iat;
-  if (res && !res.headersSent && (age > RENEW_AFTER_SECONDS || claims.name !== user.name)) {
+  if (res && !res.headersSent && (reissue || age > RENEW_AFTER_SECONDS || claims.name !== user.name)) {
     await issue(res, { ...session, sv: user.sessionVersion, policy: asPolicy(user.sessionPolicy) });
   }
   return session;

@@ -1,17 +1,59 @@
-// Minimal transactional email via Resend's HTTP API (no SDK dependency).
-// Configure with env vars — never hardcode the key:
-//   RESEND_API_KEY  API key from https://resend.com/api-keys
-//   EMAIL_FROM      Verified sender, e.g. "Split+ <no-reply@yourdomain.com>"
-// Without a key, local dev prints the email to the server console instead;
-// production refuses to pretend it sent anything.
+import nodemailer, { type Transporter } from "nodemailer";
+
+// Transactional email. Configure with env vars — never hardcode credentials:
+//   GMAIL_USER + GMAIL_APP_PASSWORD  Send from a Gmail account over SMTP (a
+//       Google "App password", not the account password). Works for any
+//       recipient without owning a domain; Gmail allows ~500 messages/day.
+//   RESEND_API_KEY + EMAIL_FROM      Resend's HTTP API. Without a verified
+//       domain in EMAIL_FROM, Resend only delivers to the account owner.
+// Gmail is used when configured, otherwise Resend. Without either, local dev
+// prints the email to the server console; production refuses to pretend.
 
 export class EmailNotConfiguredError extends Error {}
 
 export function emailConfigured(): boolean {
-  return !!process.env.RESEND_API_KEY || process.env.NODE_ENV !== "production";
+  return (
+    !!(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) ||
+    !!process.env.RESEND_API_KEY ||
+    process.env.NODE_ENV !== "production"
+  );
+}
+
+let gmail: Transporter | null = null;
+
+function gmailTransport(user: string, pass: string): Transporter {
+  gmail ??= nodemailer.createTransport({
+    host: "smtp.gmail.com",
+    port: 465,
+    secure: true,
+    // App passwords are shown with spaces; Gmail wants the 16 letters.
+    auth: { user, pass: pass.replace(/\s+/g, "") },
+    tls: { minVersion: "TLSv1.3" },
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 15_000,
+  });
+  return gmail;
+}
+
+async function sendViaGmail(user: string, pass: string, to: string, subject: string, text: string, html: string) {
+  try {
+    await gmailTransport(user, pass).sendMail({ from: { name: "Split+", address: user }, to, subject, text, html });
+  } catch (err) {
+    const e = err as { code?: string; responseCode?: number; message?: string };
+    console.error("[mail] gmail send failed", e.code, e.responseCode, e.message);
+    if (e.code === "EAUTH") {
+      throw new EmailNotConfiguredError("Email sign-in for this server failed. Ask the app admin to check the Gmail app password.");
+    }
+    throw new Error("Couldn't send the email. Try again in a minute.");
+  }
 }
 
 export async function sendEmail(to: string, subject: string, text: string, html: string) {
+  const gUser = process.env.GMAIL_USER?.trim();
+  const gPass = process.env.GMAIL_APP_PASSWORD;
+  if (gUser && gPass) return sendViaGmail(gUser, gPass, to, subject, text, html);
+
   const key = process.env.RESEND_API_KEY;
   if (!key) {
     if (process.env.NODE_ENV === "production") {

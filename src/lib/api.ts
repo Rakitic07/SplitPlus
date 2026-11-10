@@ -36,7 +36,13 @@ function setToken(token: string | null) {
     if (token) localStorage.setItem(TOKEN_KEY, token);
     else localStorage.removeItem(TOKEN_KEY);
   } catch {
-    /* ignore */
+    // Storage full or blocked: never leave an older token behind; the cookie
+    // alone keeps the web session working.
+    try {
+      localStorage.removeItem(TOKEN_KEY);
+    } catch {
+      /* ignore */
+    }
   }
 }
 
@@ -246,7 +252,7 @@ export class ApiError extends Error {
   }
 }
 
-async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
+async function req<T>(path: string, init: RequestInit = {}, retried = false): Promise<T> {
   const headers = new Headers(init.headers);
   if (init.body) headers.set("Content-Type", "application/json");
   const token = getToken();
@@ -259,7 +265,13 @@ async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (renewed && token && renewed !== token) setToken(renewed);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    if (res.status === 401 && (data as { code?: string }).code === "session") sessionEnded?.();
+    if (res.status === 401 && (data as { code?: string }).code === "session") {
+      // A request sent with an older token (e.g. started before logging in)
+      // must not sign out the session that replaced it — retry with the new one.
+      if (!retried && getToken() !== token) return req<T>(path, init, true);
+      setToken(null);
+      sessionEnded?.();
+    }
     throw new ApiError((data as { error?: string }).error ?? "Something went wrong", res.status);
   }
   return data as T;
