@@ -1,0 +1,28 @@
+server/lib/auth.ts
+  s_cb0fba85de97fe::t_ec613693af000b 95-97,105-107,112,118,124,130,137-138,144-148
+  s_cb0fba85de97fe::t_8100948aa1503b 140-143,149,158
+src/lib/api.ts
+  s_cb0fba85de97fe::t_31a97ef1f6f0bf 39-45
+  s_cb0fba85de97fe::t_e8776e6f548ba0 255,268-274
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3fe1f34a548a05de815614e16afff2b637cca798",
+  "prompts": {},
+  "humans": {
+    "h_e5e8219ccbe631": {
+      "author": "Rakitic <rokktim07@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_cb0fba85de97fe": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "734c7345-66fa-44f9-a3c2-de3b88fff4a0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Rakitic <rokktim07@gmail.com>"
+    }
+  }
+}
