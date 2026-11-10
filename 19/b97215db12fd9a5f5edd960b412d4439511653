@@ -1,0 +1,45 @@
+src/lib/api.ts
+  s_cb0fba85de97fe::t_31a97ef1f6f0bf 39-45
+  s_cb0fba85de97fe::t_e8776e6f548ba0 255,268-274
+server/lib/mailer.ts
+  s_cb0fba85de97fe::t_68a61583d518e6 1
+  s_cb0fba85de97fe::t_19fb0bddf53948 22,24
+  s_cb0fba85de97fe::t_5abf0e499e50a8 3-10,15-21,23,25-49,53-56
+  s_cb0fba85de97fe::t_091fd061266db9 2
+package.json
+  s_cb0fba85de97fe::t_1a099d5d3545c8 34,47
+.env.example
+  s_cb0fba85de97fe::t_bef5be011a9e50 39-45
+README.md
+  s_cb0fba85de97fe::t_619aa563d67f59 172-219
+  s_cb0fba85de97fe::t_030fd0c24e5b53 81,84-85
+  s_cb0fba85de97fe::t_441fc2e56aecd1 19-20
+  s_cb0fba85de97fe::t_11f107fdf39366 86
+server/lib/auth.ts
+  s_cb0fba85de97fe::t_ec613693af000b 95-97,105-107,112,118,124,130,137-138,144-148
+  s_cb0fba85de97fe::t_8100948aa1503b 140-143,149,158
+package-lock.json
+  s_cb0fba85de97fe::t_e49b9abdd980a2 1821-1822,3731-3732
+  s_cb0fba85de97fe::t_c02fc9f7ea89d9 25,38,1813-1820,3724-3730
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "19b97215db12fd9a5f5edd960b412d4439511653",
+  "prompts": {},
+  "humans": {
+    "h_e5e8219ccbe631": {
+      "author": "Rakitic <rokktim07@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_cb0fba85de97fe": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "734c7345-66fa-44f9-a3c2-de3b88fff4a0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": null
+    }
+  }
+}
